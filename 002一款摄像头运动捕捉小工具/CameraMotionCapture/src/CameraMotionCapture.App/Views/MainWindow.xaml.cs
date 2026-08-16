@@ -13,8 +13,8 @@ namespace CameraMotionCapture.App.Views;
 
 public partial class MainWindow : Window
 {
-    private readonly MainViewModel _viewModel;
-    private readonly ISettingsService _settingsService;
+    private readonly MainViewModel _viewModel = null!;
+    private readonly ISettingsService _settingsService = null!;
     private readonly Dictionary<int, CameraPanelView> _panelViews = new();
     private int _currentFullScreenIndex = -1;
 

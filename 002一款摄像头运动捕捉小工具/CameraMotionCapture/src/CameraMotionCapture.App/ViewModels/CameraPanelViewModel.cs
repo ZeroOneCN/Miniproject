@@ -19,9 +19,11 @@ public class CameraPanelViewModel : ViewModelBase, IDisposable
 {
     private readonly CameraService _cameraService;
     private readonly MotionDetectionService _motionService;
+    private readonly INotificationService? _notificationService;
     private IFaceRecognitionService? _faceService;
     private readonly DispatcherTimer _frameTimer;
     private AppConfig _config;
+    private DateTime _lastNotificationTime = DateTime.MinValue;
 
     private readonly int _cameraId;
     private string? _cameraUrl;
@@ -104,11 +106,12 @@ public class CameraPanelViewModel : ViewModelBase, IDisposable
     public ICommand ZoomResetCommand { get; }
     public ICommand MaximizeCommand { get; }
 
-    public CameraPanelViewModel(int cameraId, AppConfig config)
+    public CameraPanelViewModel(int cameraId, AppConfig config, INotificationService? notificationService = null)
     {
         _cameraId = cameraId;
         _cameraName = $"摄像头 {cameraId}";
         _config = config;
+        _notificationService = notificationService;
 
         _cameraService = new CameraService();
         _motionService = new MotionDetectionService();
@@ -128,12 +131,13 @@ public class CameraPanelViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>通过 URL 创建网络摄像头面板</summary>
-    public CameraPanelViewModel(string url, AppConfig config, int? cameraId = null)
+    public CameraPanelViewModel(string url, AppConfig config, int? cameraId = null, INotificationService? notificationService = null)
     {
         _cameraId = cameraId ?? -1;
         _cameraUrl = url;
         _cameraName = $"IP摄像头 {_cameraId}";
         _config = config;
+        _notificationService = notificationService;
 
         _cameraService = new CameraService();
         _motionService = new MotionDetectionService();
@@ -313,12 +317,69 @@ public class CameraPanelViewModel : ViewModelBase, IDisposable
             _lastFrame = frame.Clone();
             MotionDetected = motion;
 
+            // ===== 运动通知 =====
+            if (motion && _config.MotionDetection.Enabled && IsMonitoring)
+            {
+                TrySendMotionNotification(frame);
+            }
+
             frame.Dispose();
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "CameraPanel {CamId} 帧处理异常", _cameraId);
         }
+    }
+
+    /// <summary>检测到运动时发送通知（遵守冷却时间）</summary>
+    private void TrySendMotionNotification(Mat frame)
+    {
+        if (_notificationService == null || !_notificationService.IsConfigured)
+        {
+            Log.Warning("CameraPanel {CamId} 通知服务未配置，跳过通知", _cameraId);
+            return;
+        }
+
+        // 冷却检查
+        var cooldown = _config.MotionDetection.NotificationCooldownSeconds;
+        if ((DateTime.Now - _lastNotificationTime).TotalSeconds < cooldown)
+            return;
+
+        _lastNotificationTime = DateTime.Now;
+        StatusText = "运动检测到，发送通知...";
+
+        var snapshotDir = _config.Recording.SaveDir;
+        var quality = _config.Recording.Quality;
+        var useDailyFolder = _config.Recording.UseDailyFolder;
+
+        // 在 UI 线程克隆帧，确保数据完整（frame 即将被主线程 Dispose）
+        var clone = frame.Clone();
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using (clone)
+                {
+                    var success = await _notificationService.SendMotionNotificationAsync(
+                        clone, snapshotDir, quality, useDailyFolder);
+
+                    if (success)
+                    {
+                        Log.Information("CameraPanel {CamId} 运动通知已发送", _cameraId);
+                    }
+                    else
+                    {
+                        Log.Warning("CameraPanel {CamId} 运动通知发送失败", _cameraId);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "CameraPanel {CamId} 运动通知异常", _cameraId);
+                try { clone.Dispose(); } catch { }
+            }
+        });
     }
 
     /// <summary>在帧上绘制叠加信息（时间戳、设备名、水印）</summary>
