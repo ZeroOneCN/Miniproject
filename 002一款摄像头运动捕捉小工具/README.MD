@@ -4,7 +4,7 @@
 
 基于 **OpenCvSharp4 + WPF + MVVM** 的本地摄像头监控系统，支持多摄像头预览、运动检测、人脸检测、录像存储、企业微信通知等功能。
 
-![Image](/images/ScreenShot_2026-08-16_200715_149.png)
+![Image](./images/ScreenShot_2026-08-16_200715_149.png)
 
 ---
 
