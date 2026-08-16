@@ -133,9 +133,6 @@
                                        Text="50" VerticalAlignment="Center" HorizontalAlignment="Right" FontSize="14" />
                         </Grid>
 
-                        <Label Content="通知冷却 (分钟):" Margin="0,8,0,0" FontWeight="Bold" />
-                        <TextBox x:Name="NotifCooldownInput" Text="5" />
-
                         <Label Content="抓拍模式:" Margin="0,8,0,0" FontWeight="Bold" />
                         <ComboBox x:Name="SnapshotModeCombo" SelectedIndex="0">
                             <ComboBoxItem Content="关闭" />
@@ -213,6 +210,13 @@
 
                     <Label Content="Webhook URL:" FontWeight="Bold" />
                     <TextBox x:Name="WebhookInput" Height="30" FontSize="13" />
+
+                    <Label Content="通知频率 (分钟):" Margin="0,10,0,0" FontWeight="Bold" />
+                    <TextBlock TextWrapping="Wrap" Margin="0,2,0,4" FontSize="12"
+                               Foreground="{StaticResource TextGray}">
+                        两次运动通知之间的最小间隔时间，避免频繁发送。
+                    </TextBlock>
+                    <TextBox x:Name="NotifCooldownInput" Text="5" />
 
                     <Label Content="Webhook 测试:" Margin="0,10,0,0" FontWeight="Bold" />
                     <Button Content="测试连接"

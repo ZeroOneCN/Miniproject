@@ -213,7 +213,7 @@ public class MainViewModel : ViewModelBase
             int count = Math.Min(available.Count, 9);
             for (int i = 0; i < count; i++)
             {
-                var panel = new CameraPanelViewModel(available[i], _config);
+                var panel = new CameraPanelViewModel(available[i], _config, _notificationService);
                 Cameras.Add(panel);
             }
 
@@ -223,7 +223,7 @@ public class MainViewModel : ViewModelBase
         }
         else if (Cameras.Count == 0)
         {
-            var panel = new CameraPanelViewModel(0, _config);
+            var panel = new CameraPanelViewModel(0, _config, _notificationService);
             Cameras.Add(panel);
             CurrentLayoutMode = LayoutMode.Single;
         }
@@ -246,7 +246,7 @@ public class MainViewModel : ViewModelBase
             }
         }
 
-        var panel = new CameraPanelViewModel(nextId, _config);
+        var panel = new CameraPanelViewModel(nextId, _config, _notificationService);
         Cameras.Add(panel);
         UpdateDefaultCameraIndicator();
         AdjustLayoutForCount(Cameras.Count);
@@ -282,7 +282,7 @@ public class MainViewModel : ViewModelBase
             }
         }
 
-        var panel = new CameraPanelViewModel(url, _config, nextId);
+        var panel = new CameraPanelViewModel(url, _config, nextId, _notificationService);
         Cameras.Add(panel);
         UpdateDefaultCameraIndicator();
         AdjustLayoutForCount(Cameras.Count);
@@ -365,6 +365,12 @@ public class MainViewModel : ViewModelBase
     {
         _config = newConfig;
         SaveSettings();
+
+        // 重新配置通知服务
+        if (!string.IsNullOrEmpty(_config.MotionDetection.WebhookUrl))
+        {
+            _notificationService.Configure(_config.MotionDetection.WebhookUrl);
+        }
 
         // 更新所有摄像头面板的配置
         foreach (var cam in Cameras)
