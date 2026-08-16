@@ -6,7 +6,7 @@
 *.sln.docstates
 
 # Build output
-dist/
+**/dist/
 **/publish/
 
 # Logs
