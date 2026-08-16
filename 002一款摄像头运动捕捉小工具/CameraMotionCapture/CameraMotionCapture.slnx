@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CameraMotionCapture.App/CameraMotionCapture.App.csproj" />
+    <Project Path="src/CameraMotionCapture.Core/CameraMotionCapture.Core.csproj" />
+    <Project Path="src/CameraMotionCapture.Shared/CameraMotionCapture.Shared.csproj" />
+  </Folder>
+</Solution>

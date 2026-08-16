@@ -1,0 +1,239 @@
+<Window x:Class="CameraMotionCapture.App.Views.SettingsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="系统设置"
+        Width="520" Height="500"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{StaticResource WindowBackground}">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TabControl Grid.Row="0" Margin="0,0,0,10">
+            <!-- ===== Tab 1: 摄像头设置 ===== -->
+            <TabItem Header="摄像头">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="8">
+                        <Label Content="采集后端:" FontWeight="Bold" />
+                        <ComboBox x:Name="BackendCombo" SelectedIndex="0">
+                            <ComboBoxItem Content="Auto" />
+                            <ComboBoxItem Content="DSHOW" />
+                            <ComboBoxItem Content="MSMF" />
+                            <ComboBoxItem Content="ANY" />
+                        </ComboBox>
+
+                        <Label Content="分辨率:" Margin="0,8,0,0" FontWeight="Bold" />
+                        <ComboBox x:Name="ResolutionCombo" SelectedIndex="0">
+                            <ComboBoxItem Content="1280x720 (HD)" />
+                            <ComboBoxItem Content="1920x1080 (FHD)" />
+                            <ComboBoxItem Content="640x480 (SD)" />
+                            <ComboBoxItem Content="320x240 (低)" />
+                        </ComboBox>
+
+                        <Label Content="采集帧率 (FPS):" Margin="0,8,0,0" FontWeight="Bold" />
+                        <TextBox x:Name="FpsInput" Text="30" />
+
+                        <Label Content="预览帧率:" Margin="0,8,0,0" FontWeight="Bold" />
+                        <TextBox x:Name="PreviewFpsInput" Text="10" />
+
+                        <CheckBox x:Name="LowLoadCheck" Content="低负载预览" Margin="0,8,0,0" />
+                        <CheckBox x:Name="HardwareAccelCheck" Content="硬件加速" Margin="0,4,0,0" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ===== Tab 2: 录制设置 ===== -->
+            <TabItem Header="录制">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="8">
+                        <Label Content="保存路径:" FontWeight="Bold" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="SaveDirInput" Grid.Column="0" IsReadOnly="True" />
+                            <Button Grid.Column="1" Content="浏览..."
+                                    x:Name="BrowseButton"
+                                    Click="BrowseButton_Click"
+                                    Margin="6,0,0,0" Padding="10,4"
+                                    Style="{StaticResource ToolbarButton}" />
+                        </Grid>
+
+                        <Label Content="编码格式:" Margin="0,8,0,0" FontWeight="Bold" />
+                        <ComboBox x:Name="CodecCombo" SelectedIndex="0">
+                            <ComboBoxItem Content="自动" />
+                            <ComboBoxItem Content="XVID" />
+                            <ComboBoxItem Content="MJPG" />
+                            <ComboBoxItem Content="H264" />
+                            <ComboBoxItem Content="MP4V" />
+                        </ComboBox>
+
+                        <Label Content="录制模式:" Margin="0,8,0,0" FontWeight="Bold" />
+                        <ComboBox x:Name="RecordModeCombo" SelectedIndex="0">
+                            <ComboBoxItem Content="全时录制" />
+                            <ComboBoxItem Content="运动录制" />
+                            <ComboBoxItem Content="定时录制" />
+                        </ComboBox>
+
+                        <Label Content="定时段 (HH:mm):" Margin="0,8,0,0" FontWeight="Bold" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="ScheduleStartInput" Grid.Column="0" Text="08:00" />
+                            <Label Grid.Column="1" Content=" 到 " Margin="2,0" />
+                            <TextBox x:Name="ScheduleEndInput" Grid.Column="2" Text="20:00" />
+                        </Grid>
+
+                        <Label Content="分段时长 (小时):" Margin="0,8,0,0" FontWeight="Bold" />
+                        <TextBox x:Name="SegmentHoursInput" Text="1" />
+
+                        <Label Content="图像质量:" Margin="0,8,0,0" FontWeight="Bold" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Slider x:Name="QualitySlider" Grid.Column="0" Minimum="1" Maximum="100" />
+                            <TextBlock x:Name="QualityLabel" Grid.Column="1" Width="40"
+                                       Text="100%" VerticalAlignment="Center" HorizontalAlignment="Right" FontSize="14" />
+                        </Grid>
+
+                        <Label Content="空间阈值 (GB):" Margin="0,8,0,0" FontWeight="Bold" />
+                        <TextBox x:Name="MaxStorageInput" Text="50" />
+
+                        <CheckBox x:Name="DailyFolderCheck" Content="按天文件夹" Margin="0,8,0,0" />
+                        <CheckBox x:Name="AutoCompressCheck" Content="自动压缩" Margin="0,4,0,0" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ===== Tab 3: 运动检测 ===== -->
+            <TabItem Header="运动检测">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="8">
+                        <CheckBox x:Name="MotionEnabledCheck" Content="启用运动检测"
+                                  FontWeight="Bold" FontSize="14" />
+
+                        <Label Content="灵敏度 (阈值):" Margin="0,8,0,0" FontWeight="Bold" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Slider x:Name="ThresholdSlider" Grid.Column="0"
+                                    Minimum="1" Maximum="100" IsDirectionReversed="True" />
+                            <TextBlock x:Name="ThresholdLabel" Grid.Column="1" Width="40"
+                                       Text="50" VerticalAlignment="Center" HorizontalAlignment="Right" FontSize="14" />
+                        </Grid>
+
+                        <Label Content="通知冷却 (分钟):" Margin="0,8,0,0" FontWeight="Bold" />
+                        <TextBox x:Name="NotifCooldownInput" Text="5" />
+
+                        <Label Content="抓拍模式:" Margin="0,8,0,0" FontWeight="Bold" />
+                        <ComboBox x:Name="SnapshotModeCombo" SelectedIndex="0">
+                            <ComboBoxItem Content="关闭" />
+                            <ComboBoxItem Content="按键抓拍" />
+                            <ComboBoxItem Content="运动触发" />
+                            <ComboBoxItem Content="定时抓拍" />
+                        </ComboBox>
+
+                        <Label Content="抓拍间隔 (秒):" Margin="0,8,0,0" FontWeight="Bold" />
+                        <TextBox x:Name="SnapshotIntervalInput" Text="5" />
+
+                        <Label Content="触发冷却 (秒):" Margin="0,8,0,0" FontWeight="Bold" />
+                        <TextBox x:Name="SnapshotCooldownInput" Text="3" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ===== Tab 4: 画面叠加 ===== -->
+            <TabItem Header="叠加">
+                <StackPanel Margin="8">
+                    <Label Content="画面叠加信息:" FontWeight="Bold" FontSize="14" />
+                    <CheckBox x:Name="OverlayTimestampCheck" Content="叠加时间戳" Margin="0,8,0,0" />
+                    <CheckBox x:Name="OverlayDeviceCheck" Content="叠加设备名" Margin="0,4,0,0" />
+
+                    <Label Content="水印文字:" Margin="0,12,0,0" FontWeight="Bold" />
+                    <TextBox x:Name="WatermarkInput" />
+                </StackPanel>
+            </TabItem>
+
+            <!-- ===== Tab 5: 人脸识别 ===== -->
+            <TabItem Header="人脸识别">
+                <StackPanel Margin="8">
+                    <CheckBox x:Name="FaceEnabledCheck" Content="启用人脸识别"
+                              FontWeight="Bold" FontSize="14" />
+
+                    <Label Content="置信度阈值:" Margin="0,10,0,0" FontWeight="Bold" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Slider x:Name="FaceConfidenceSlider" Grid.Column="0"
+                                Minimum="0" Maximum="100" />
+                        <TextBlock x:Name="FaceConfidenceLabel" Grid.Column="1" Width="40"
+                                   Text="80" VerticalAlignment="Center" HorizontalAlignment="Right" FontSize="14" />
+                    </Grid>
+
+                    <Label Content="级联文件路径:" Margin="0,10,0,0" FontWeight="Bold" />
+                    <TextBox x:Name="CascadePathInput" Text="haarcascade_frontalface_default.xml" />
+
+                    <Label Content="已知人脸目录:" Margin="0,8,0,0" FontWeight="Bold" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="KnownFacesInput" Grid.Column="0" Text="known_faces" />
+                        <Button Grid.Column="1" Content="浏览..."
+                                x:Name="BrowseFacesButton"
+                                Click="BrowseFacesButton_Click"
+                                Margin="6,0,0,0" Padding="10,4"
+                                Style="{StaticResource ToolbarButton}" />
+                    </Grid>
+                </StackPanel>
+            </TabItem>
+
+            <!-- ===== Tab 6: 通知 ===== -->
+            <TabItem Header="通知">
+                <StackPanel Margin="8">
+                    <Label Content="企业微信 Webhook 通知" FontWeight="Bold" FontSize="14" />
+                    <TextBlock TextWrapping="Wrap" Margin="0,4,0,8" FontSize="12"
+                               Foreground="{StaticResource TextGray}">
+                        设置企业微信机器人的 Webhook 地址，当运动检测触发时自动发送通知。
+                    </TextBlock>
+
+                    <Label Content="Webhook URL:" FontWeight="Bold" />
+                    <TextBox x:Name="WebhookInput" Height="30" FontSize="13" />
+
+                    <Label Content="Webhook 测试:" Margin="0,10,0,0" FontWeight="Bold" />
+                    <Button Content="测试连接"
+                            x:Name="TestWebhookButton"
+                            Click="TestWebhookButton_Click"
+                            Height="30" Width="100"
+                            HorizontalAlignment="Left"
+                            Style="{StaticResource ToolbarButton}" />
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+
+        <!-- 底部按钮 -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="保存设置" x:Name="SaveButton"
+                    Click="SaveButton_Click" Width="110"
+                    Style="{StaticResource PrimaryButton}" />
+            <Button Content="取消" x:Name="CancelButton"
+                    Click="CancelButton_Click" Width="80"
+                    Margin="10,0,0,0"
+                    Padding="8,4" FontSize="14" Cursor="Hand" />
+        </StackPanel>
+    </Grid>
+</Window>
