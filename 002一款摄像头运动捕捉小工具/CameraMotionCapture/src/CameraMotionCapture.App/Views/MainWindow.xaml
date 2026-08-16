@@ -1,0 +1,153 @@
+<Window x:Class="CameraMotionCapture.App.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:CameraMotionCapture.App.ViewModels"
+        xmlns:views="clr-namespace:CameraMotionCapture.App.Views"
+        xmlns:conv="clr-namespace:CameraMotionCapture.App.Converters"
+        Title="摄像头监控系统 v1.0"
+        Width="1400" Height="860"
+        MinWidth="1200" MinHeight="700"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource WindowBackground}">
+    <Window.Resources>
+        <conv:NullToVisibilityConverter x:Key="NullToVisibility" />
+        <conv:EnumToIndexConverter x:Key="EnumToIndex" />
+        <conv:InverseBoolConverter x:Key="InverseBool" />
+        <conv:LayoutToVisibilityConverter x:Key="LayoutToVisibility" />
+    </Window.Resources>
+
+    <Grid Margin="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ===== 顶部工具栏 ===== -->
+        <Border Grid.Row="0"
+                Background="{StaticResource ToolbarBg}"
+                CornerRadius="6"
+                BorderBrush="{StaticResource BorderLight}"
+                BorderThickness="1"
+                Padding="10,5"
+                Margin="0,0,0,6">
+            <StackPanel Orientation="Horizontal">
+                <Label Content="布局:" VerticalAlignment="Center" FontSize="13" Padding="0" />
+                <ComboBox SelectedIndex="{Binding CurrentLayoutMode, Converter={StaticResource EnumToIndex}}"
+                          Width="110" Margin="6,0,10,0" FontSize="13">
+                    <ComboBoxItem Content="单画面" Tag="Single" />
+                    <ComboBoxItem Content="2x2 四画面" Tag="Grid2x2" />
+                    <ComboBoxItem Content="3x3 九画面" Tag="Grid3x3" />
+                    <ComboBoxItem Content="1+2 三画面" Tag="Grid1Plus2" />
+                </ComboBox>
+
+                <!-- 单画面摄像头选择下拉菜单 -->
+                <Label Content="选择摄像头:" VerticalAlignment="Center" FontSize="13" Padding="0"
+                       Visibility="{Binding CurrentLayoutMode, Converter={StaticResource LayoutToVisibility}}" />
+                <ComboBox ItemsSource="{Binding Cameras}"
+                          SelectedIndex="{Binding SelectedCameraIndex}"
+                          DisplayMemberPath="CameraName"
+                          Width="150" Margin="6,0,10,0" FontSize="13"
+                          Visibility="{Binding CurrentLayoutMode, Converter={StaticResource LayoutToVisibility}}" />
+
+                <Label Content="默认摄像头:" VerticalAlignment="Center" FontSize="13" Padding="0" />
+                <ComboBox ItemsSource="{Binding Cameras}"
+                          SelectedIndex="{Binding DefaultCameraIndex}"
+                          DisplayMemberPath="CameraName"
+                          Width="110" Margin="6,0,10,0" FontSize="13" />
+
+                <Separator Style="{StaticResource ToolbarSeparator}" />
+
+                <Button Content="+ 添加"
+                        Command="{Binding AddCameraCommand}"
+                        Style="{StaticResource ToolbarButton}"
+                        ToolTip="添加新摄像头" />
+                <Button Content="− 移除"
+                        Command="{Binding RemoveCameraCommand}"
+                        Style="{StaticResource ToolbarButton}"
+                        ToolTip="移除最后一个摄像头" />
+                <Button Content="⟳ 刷新"
+                        Command="{Binding RefreshCamerasCommand}"
+                        Style="{StaticResource ToolbarButton}"
+                        ToolTip="重新检测可用摄像头" />
+
+                <Separator Style="{StaticResource ToolbarSeparator}" />
+
+                <Button Content="🌐 +IP摄像头"
+                        Command="{Binding AddIpCameraCommand}"
+                        Style="{StaticResource ToolbarButton}"
+                        ToolTip="添加局域网 IP 摄像头（RTSP/HTTP/MJPEG）" />
+
+                <Separator Style="{StaticResource ToolbarSeparator}" />
+
+                <Button Content="▶ 全部启动"
+                        Command="{Binding StartAllCommand}"
+                        Style="{StaticResource ToolbarPrimaryButton}" />
+                <Button Content="■ 全部停止"
+                        Command="{Binding StopAllCommand}"
+                        Style="{StaticResource ToolbarDangerButton}" />
+
+                <Separator Style="{StaticResource ToolbarSeparator}" />
+
+                <Button Content="⚙ 设置"
+                        Command="{Binding ShowSettingsCommand}"
+                        Style="{StaticResource ToolbarButton}"
+                        ToolTip="系统设置" />
+                <Button Content="🗑 文件清理"
+                        Command="{Binding ShowCleanupDialogCommand}"
+                        Style="{StaticResource ToolbarButton}"
+                        ToolTip="文件清理设置" />
+                <Button Content="📁 保存目录"
+                        Command="{Binding BrowseDirectoryCommand}"
+                        Style="{StaticResource ToolbarButton}"
+                        ToolTip="选择保存目录" />
+            </StackPanel>
+        </Border>
+
+        <!-- ===== 摄像头网格 ===== -->
+        <Border Grid.Row="1"
+                Background="{StaticResource PanelBg}"
+                CornerRadius="6"
+                BorderBrush="#444"
+                BorderThickness="1"
+                Padding="0">
+            <Grid x:Name="CameraGrid" />
+        </Border>
+
+        <!-- ===== 底部状态栏 ===== -->
+        <Border Grid.Row="2"
+                Background="{StaticResource ToolbarBg}"
+                CornerRadius="6"
+                BorderBrush="{StaticResource BorderLight}"
+                BorderThickness="1"
+                Padding="10,4"
+                Margin="0,6,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0"
+                           Text="{Binding StatusText}"
+                           FontSize="13"
+                           VerticalAlignment="Center" />
+
+                <TextBlock Grid.Column="2"
+                           FontSize="12"
+                           Foreground="{StaticResource TextGray}"
+                           VerticalAlignment="Center">
+                    <Run Text="摄像头: " />
+                    <Run Text="{Binding ActiveCameraCount}" FontWeight="Bold" Foreground="{StaticResource TextDark}" />
+                    <Run Text=" | 布局: " />
+                    <Run Text="{Binding GridRows, StringFormat={}{0}}" FontWeight="Bold" Foreground="{StaticResource TextDark}" />
+                    <Run Text="×" />
+                    <Run Text="{Binding GridColumns, StringFormat={}{0}}" FontWeight="Bold" Foreground="{StaticResource TextDark}" />
+                    <Run Text=" | 默认: " />
+                    <Run Text="{Binding DefaultCameraName, Mode=OneWay}" FontWeight="Bold" Foreground="Green" />
+                </TextBlock>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
