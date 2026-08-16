@@ -4,6 +4,8 @@
 
 基于 **OpenCvSharp4 + WPF + MVVM** 的本地摄像头监控系统，支持多摄像头预览、运动检测、人脸检测、录像存储、企业微信通知等功能。
 
+![Image](/images/ScreenShot_2026-08-16_200715_149.png)
+
 ---
 
 ## 功能特性
@@ -15,7 +17,7 @@
 | **运动检测** | 可调灵敏度，支持运动触发录像和通知 |
 | **人脸检测** | 基于 Haar Cascade 实时人脸检测，画面叠加人脸框 |
 | **录像存储** | 全时录制/运动录制/定时录制，支持分段存储、自动清理 |
-| **水印叠加** | 支持中文水印（微软雅黑）、时间戳、设备名叠加 |
+| **水印叠加** | 支持中文水印、时间戳、设备名叠加 |
 | **企业微信通知** | 运动检测触发时通过 Webhook 发送图片通知 |
 | **IP 摄像头接入** | 支持局域网 RTSP 网络摄像头接入 |
 | **配置持久化** | 所有设置自动保存，重启后恢复 |
@@ -30,7 +32,7 @@ CameraMotionCapture/
 │   ├── CameraMotionCapture.App/     # WPF 界面层 (MVVM)
 │   │   ├── ViewModels/              # 视图模型
 │   │   ├── Views/                   # XAML 视图
-│   │   ├── Helpers/                 # 辅助工具（中文水印渲染等）
+│   │   ├── Helpers/                 # 辅助工具
 │   │   └── Converters/              # 值转换器
 │   ├── CameraMotionCapture.Core/    # 核心业务层
 │   │   ├── Models/                  # 数据模型
@@ -135,7 +137,7 @@ dotnet publish src/CameraMotionCapture.App -c Release -r win-x64 --self-containe
 ### 水印
 
 - 时间戳、设备名、自定义文本水印
-- 支持中文显示（微软雅黑字体）
+- 支持中文显示
 - 水印位置：左上角（时间戳/设备名）、底部居中（自定义水印）
 
 ---
@@ -155,9 +157,3 @@ dotnet publish src/CameraMotionCapture.App -c Release -r win-x64 --self-containe
 - [ ] GPU 加速 (DirectML)
 - [ ] 录像回放与检索
 - [ ] RTMP/HLS 推流
-
----
-
-## License
-
-MIT
