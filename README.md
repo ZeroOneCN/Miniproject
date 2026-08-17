@@ -20,7 +20,7 @@
 | **001** | **论文/文章降重助手** | 智能文本改写、同义词替换、查重对比 | `requests`, `API` | [查看](./001一款论文文章降重的小工具/README.md) |
 | **002** | **摄像头监控系统** | 多摄像头监控、运动检测、人脸检测、录像存储、企业微信通知 | `C#`, `.NET 10`, `WPF`, `OpenCvSharp4` | [查看](./002一款摄像头运动捕捉小工具/README.md) |
 | **003** | **端口占用查看器** | 端口扫描、进程关联、一键结束进程 | `C#`, `.NET 10`, `WPF`, `P/Invoke` | [查看](./003一款查看端口占用的小工具/README.MD) |
-| **004** | **定时关屏助手** | 自定义屏幕熄灭时间、电源方案管理 | `ctypes`, `Tkinter` | [查看](./004一款电脑定时关屏幕小工具/README.MD) |
+| **004** | **屏幕关闭时间管理** | 自定义屏幕熄灭时间、电源方案管理、一键设置 | `C#`, `.NET 10`, `WPF`, `MVVM` | [查看](./004一款电脑定时关屏幕小工具/README.md) |
 | **005** | **身份证规则校验器** | 身份证格式/日期/校验位校验，支持批量验证 | `PyQt6` | [查看](./005一款身份证规则校验小工具/README.md) |
 | **006** | **敏感文件泄露检查** | GitHub 仓库敏感文件扫描、风险评级、报告导出 | `Tkinter`, `GitHub API` | [查看](./006一款敏感文件检查的小工具/README.md) |
 | ... | *更多工具 Loading...* | *Coming Soon* | ... | ... |
@@ -47,8 +47,8 @@ cd PythonProject
     python 主程序.py
 
     # C# 工具 (.NET 10 WPF)
-    cd 00X某个工具目录/PortMonitor
-    dotnet run --project src/PortMonitor/PortMonitor.csproj
+    cd 00X某个工具目录/ToolName
+    dotnet run --project src/ToolName/ToolName.csproj
     ```
 
 *   **方式 B：使用打包程序** (推荐普通用户)
