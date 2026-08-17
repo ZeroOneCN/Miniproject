@@ -1,0 +1,70 @@
+<Window x:Class="ScreenTimeoutManager.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="屏幕关闭时间管理"
+        Width="780" Height="420"
+        ResizeMode="CanMinimize"
+        WindowStartupLocation="CenterScreen"
+        Icon="Resources/app_icon.ico"
+        Style="{StaticResource MainWindowStyle}">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 标题 -->
+        <TextBlock Grid.Row="0" Style="{StaticResource TitleStyle}">
+            屏幕关闭时间管理
+        </TextBlock>
+
+        <!-- 当前状态 -->
+        <GroupBox Grid.Row="1" Header="当前状态">
+            <StackPanel>
+                <TextBlock Style="{StaticResource StatusLabelStyle}">
+                    <Run Text="电源方案：" />
+                    <Run Text="{Binding SchemeName}" FontWeight="SemiBold" />
+                </TextBlock>
+                <TextBlock Style="{StaticResource StatusLabelStyle}">
+                    <Run Text="屏幕关闭时间：" />
+                    <Run Text="{Binding TimeoutText}" FontWeight="SemiBold" Foreground="#0078D4" />
+                </TextBlock>
+                <TextBlock Style="{StaticResource StatusLabelStyle}" Text="{Binding AdminText}" />
+            </StackPanel>
+        </GroupBox>
+
+        <!-- 快捷设置 -->
+        <GroupBox Grid.Row="2" Header="快捷设置">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <Button Content="永不关闭" Command="{Binding SetNeverCommand}" />
+                <Button Content="设置为 1 分钟" Command="{Binding SetOneMinuteCommand}" />
+                <Button Content="恢复默认（10 分钟）" Command="{Binding SetDefaultCommand}" />
+                <Button Content="刷新状态" Command="{Binding RefreshCommand}" />
+            </StackPanel>
+        </GroupBox>
+
+        <!-- 自定义设置 -->
+        <GroupBox Grid.Row="3" Header="自定义设置">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <TextBlock Text="分钟数：" VerticalAlignment="Center" Margin="8,0,4,0" />
+                <TextBox Text="{Binding CustomMinutes, UpdateSourceTrigger=PropertyChanged}"
+                         Width="70" VerticalAlignment="Center"
+                         HorizontalContentAlignment="Center"
+                         VerticalContentAlignment="Center"
+                         Margin="4,0" />
+                <TextBlock Text="（0 表示永不关闭）" VerticalAlignment="Center"
+                           Foreground="#888888" FontSize="12" Margin="4,0" />
+                <Button Content="应用设置" Command="{Binding ApplyCustomCommand}"
+                        Margin="8,0,0,0" Padding="16,6" />
+            </StackPanel>
+        </GroupBox>
+
+        <!-- 提示 -->
+        <TextBlock Grid.Row="4" Style="{StaticResource TipStyle}"
+                   Text="提示：涉及系统电源设置，建议以管理员权限运行。"
+                   VerticalAlignment="Top" />
+    </Grid>
+</Window>
