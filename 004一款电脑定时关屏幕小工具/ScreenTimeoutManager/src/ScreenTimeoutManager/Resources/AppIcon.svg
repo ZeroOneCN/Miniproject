@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0078D4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#005A9E;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- 圆形背景 -->
+  <circle cx="256" cy="256" r="240" fill="url(#bg)" />
+  <!-- 时钟外圈 -->
+  <circle cx="256" cy="256" r="160" fill="none" stroke="white" stroke-width="24" />
+  <!-- 时钟刻度 - 12点 -->
+  <line x1="256" y1="96" x2="256" y2="136" stroke="white" stroke-width="16" stroke-linecap="round" />
+  <!-- 时钟刻度 - 3点 -->
+  <line x1="416" y1="256" x2="376" y2="256" stroke="white" stroke-width="16" stroke-linecap="round" />
+  <!-- 时钟刻度 - 6点 -->
+  <line x1="256" y1="416" x2="256" y2="376" stroke="white" stroke-width="16" stroke-linecap="round" />
+  <!-- 时钟刻度 - 9点 -->
+  <line x1="96" y1="256" x2="136" y2="256" stroke="white" stroke-width="16" stroke-linecap="round" />
+  <!-- 时针（指向10点方向） -->
+  <line x1="256" y1="256" x2="196" y2="180" stroke="white" stroke-width="20" stroke-linecap="round" />
+  <!-- 分针（指向2点方向） -->
+  <line x1="256" y1="256" x2="336" y2="180" stroke="white" stroke-width="14" stroke-linecap="round" />
+  <!-- 中心点 -->
+  <circle cx="256" cy="256" r="16" fill="white" />
+  <!-- 电源图标 - 底部 -->
+  <path d="M256 380 L256 440" stroke="white" stroke-width="20" stroke-linecap="round" />
+  <path d="M220 408 Q256 380 292 408" fill="none" stroke="white" stroke-width="12" stroke-linecap="round" />
+</svg>
