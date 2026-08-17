@@ -27,19 +27,27 @@
 
 ```
 PortMonitor/
-├── App.xaml / .cs              # 应用程序入口
-├── MainWindow.xaml / .cs       # 主窗口 (UI + 事件绑定)
-├── Converters.cs               # 值转换器
-├── app_icon.ico / .png         # 程序图标
-├── Models/
-│   ├── ConnectionInfo.cs       # 连接数据模型
-│   └── ProtocolFilter.cs       # 协议筛选枚举
-├── Services/
-│   └── NativeNetworkService.cs # P/Invoke 调用 iphlpapi.dll
-└── ViewModels/
-    ├── ObservableObject.cs     # MVVM 基类
-    ├── RelayCommand.cs         # ICommand 实现
-    └── MainViewModel.cs       # 主视图模型
+├── PortMonitor.slnx             # 解决方案文件
+├── src/
+│   └── PortMonitor/             # 项目源码
+│       ├── App.xaml / .cs       # 应用程序入口
+│       ├── MainWindow.xaml / .cs# 主窗口 (UI + 事件绑定)
+│       ├── Converters.cs        # 值转换器
+│       ├── Resources/
+│       │   ├── Styles.xaml      # 按钮样式（危险/普通）
+│       │   ├── app_icon.ico     # EXE 多分辨率图标
+│       │   └── app_icon.png     # 窗口图标
+│       ├── Models/
+│       │   ├── ConnectionInfo.cs   # 连接数据模型
+│       │   └── ProtocolFilter.cs   # 协议筛选枚举
+│       ├── Services/
+│       │   └── NativeNetworkService.cs # P/Invoke 调用 iphlpapi.dll
+│       └── ViewModels/
+│           ├── ObservableObject.cs   # MVVM 基类
+│           ├── RelayCommand.cs       # ICommand 实现
+│           └── MainViewModel.cs     # 主视图模型
+├── images/                      # 截图
+└── README.MD                    # 本文档
 ```
 
 ### 架构原则
@@ -76,20 +84,20 @@ PortMonitor/
 cd 003一款查看端口占用的小工具/PortMonitor
 
 # 还原依赖
-dotnet restore
+dotnet restore src/PortMonitor/PortMonitor.csproj
 
 # 编译
-dotnet build
+dotnet build src/PortMonitor/PortMonitor.csproj
 
 # 运行
-dotnet run
+dotnet run --project src/PortMonitor/PortMonitor.csproj
 ```
 
 ### 打包为 exe
 
 ```bash
-# 发布为单文件 exe
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o ../dist
+# 发布为单文件 exe（含压缩，约 62MB）
+dotnet publish src/PortMonitor/PortMonitor.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o ../dist
 ```
 
 打包完成后生成 `dist\PortMonitor.exe`，可直接双击运行。

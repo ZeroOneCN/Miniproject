@@ -8,13 +8,14 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>PortMonitor</AssemblyName>
     <RootNamespace>PortMonitor</RootNamespace>
-    <ApplicationIcon>app_icon.ico</ApplicationIcon>
+    <ApplicationIcon>Resources\app_icon.ico</ApplicationIcon>
+
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="app_icon.ico">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <Resource Include="Resources\app_icon.png" />
   </ItemGroup>
 
   <ItemGroup>

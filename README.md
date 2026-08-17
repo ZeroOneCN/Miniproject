@@ -47,8 +47,8 @@ cd PythonProject
     python 主程序.py
 
     # C# 工具 (.NET 10 WPF)
-    cd 00X某个工具目录/CameraMotionCapture
-    dotnet run --project src/CameraMotionCapture.App
+    cd 00X某个工具目录/PortMonitor
+    dotnet run --project src/PortMonitor/PortMonitor.csproj
     ```
 
 *   **方式 B：使用打包程序** (推荐普通用户)
@@ -63,10 +63,17 @@ cd PythonProject
 
 ```text
 00X-工具名称/
-├── dist/               # (可选) PyInstaller 打包后的可执行文件
 ├── images/             # (推荐) 存放程序截图、演示 GIF
-├── src/                # (可选) 如果代码复杂，可将源码放入 src
 ├── README.md           # (必须) 独立的说明文档，包含功能与用法
-└── 主程序.py            # 入口文件
+├── 主程序.py            # Python 入口文件
+└── ToolName/            # C# 解决方案目录
+    ├── ToolName.slnx    # 解决方案文件
+    └── src/
+        └── ToolName/    # 项目源码
+            ├── Models/
+            ├── Services/
+            ├── ViewModels/
+            ├── Views/
+            └── ...
 ```
 

@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
 using PortMonitor.Models;
 using PortMonitor.ViewModels;
 
@@ -13,6 +14,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        // Set window icon from embedded resource (works with single-file publish)
+        Icon = new BitmapImage(new Uri("pack://application:,,,/PortMonitor;component/Resources/app_icon.png"));
 
         _viewModel = new MainViewModel();
         DataContext = _viewModel;
