@@ -67,9 +67,12 @@ public class MainViewModel : ObservableObject
         _ = RefreshAsync();
     }
 
+    private int _refreshLock;
+
     public async Task RefreshAsync()
     {
-        if (IsRefreshing) return;
+        // 防重入：用 int 锁而非 IsRefreshing（避免 SetTimeoutAsync 中调用时被阻断）
+        if (Interlocked.Exchange(ref _refreshLock, 1) != 0) return;
         IsRefreshing = true;
 
         try
@@ -88,6 +91,7 @@ public class MainViewModel : ObservableObject
         finally
         {
             IsRefreshing = false;
+            _refreshLock = 0;
         }
     }
 
