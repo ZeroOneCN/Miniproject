@@ -708,8 +708,9 @@ class AsyncMonitor:
                                 ext = ".jpg"
                                 media_type2 = "image"
                             elif msg.sticker:
-                                ext = ".webp"
-                                media_type2 = "sticker"
+                                # 贴纸下载后转换为 JPG，企业微信不支持 webp
+                                ext = ".jpg"
+                                media_type2 = "image"
                             elif msg.video:
                                 ext = ".mp4"
                                 media_type2 = "video"
@@ -720,6 +721,18 @@ class AsyncMonitor:
                                 ext = ".bin"
                                 media_type2 = "file"
                             if file_bytes_val:
+                                # 贴纸 webp 转 jpg
+                                if msg.sticker:
+                                    try:
+                                        from PIL import Image
+                                        img = Image.open(BytesIO(file_bytes_val))
+                                        if img.mode in ("RGBA", "LA", "P"):
+                                            img = img.convert("RGB")
+                                        buf = BytesIO()
+                                        img.save(buf, format="JPEG", quality=90)
+                                        file_bytes_val = buf.getvalue()
+                                    except Exception as e:
+                                        logger.warning(f"[{account_name}] 贴纸转换失败: {e}")
                                 media_data = {"bytes": file_bytes_val, "filename": f"telegram{ext}", "media_type": media_type2}
                         except Exception as e:
                             logger.warning(f"[{account_name}] 下载媒体失败: {e}")
