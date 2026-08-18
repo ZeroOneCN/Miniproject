@@ -6,8 +6,6 @@ Telegram 多账号监控工具 - Web 管理后台 (FastAPI)
 """
 
 import asyncio
-import io
-from io import BytesIO
 import json
 import logging
 import sqlite3
@@ -18,6 +16,7 @@ import urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
+from io import BytesIO
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
@@ -218,6 +217,53 @@ init_history_db()
 
 
 # ============================================================
+# 媒体压缩（企业微信限制图片 2MB、文件 20MB）
+# ============================================================
+WECOM_IMAGE_MAX_SIZE = 2 * 1024 * 1024  # 2MB
+
+
+def compress_image(file_bytes: bytes, max_size: int = WECOM_IMAGE_MAX_SIZE) -> bytes:
+    """压缩图片到指定大小以内，使用 Pillow 逐步降低质量"""
+    try:
+        from PIL import Image
+    except ImportError:
+        logger.warning("Pillow 未安装，跳过图片压缩")
+        return file_bytes
+
+    if len(file_bytes) <= max_size:
+        return file_bytes
+
+    try:
+        img = Image.open(BytesIO(file_bytes))
+        # 转为 RGB（去掉 alpha 通道，JPEG 不支持透明）
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGB")
+
+        # 逐步降低分辨率和质量
+        for scale in [1.0, 0.8, 0.6, 0.4, 0.3]:
+            w = int(img.width * scale)
+            h = int(img.height * scale)
+            resized = img.resize((w, h), Image.LANCZOS)
+            for quality in [90, 80, 70, 60, 50, 40, 30]:
+                buf = BytesIO()
+                resized.save(buf, format="JPEG", quality=quality, optimize=True)
+                if buf.tell() <= max_size:
+                    logger.info(f"图片压缩成功: {len(file_bytes)} -> {buf.tell()} bytes (scale={scale}, q={quality})")
+                    return buf.getvalue()
+        # 最后兜底：最小尺寸最低质量
+        resized = img.resize((int(img.width * 0.2), int(img.height * 0.2)), Image.LANCZOS)
+        buf = BytesIO()
+        resized.save(buf, format="JPEG", quality=20, optimize=True)
+        result = buf.getvalue()
+        if len(result) > max_size:
+            logger.warning(f"图片压缩后仍超过 2MB: {len(result)} bytes")
+        return result
+    except Exception as e:
+        logger.warning(f"图片压缩失败: {e}")
+        return file_bytes
+
+
+# ============================================================
 # 企业微信媒体上传
 # ============================================================
 def wecom_upload_media(webhook_url: str, file_bytes: bytes, filename: str, file_type: str) -> Optional[str]:
@@ -404,6 +450,14 @@ async def send_webhook_alerts(alert_text: str, webhooks: list, media_data: Optio
                 media_type = media_data.get("media_type", "file")
                 if file_bytes:
                     wecom_type = "image" if media_type in ("image", "sticker", "gif") else "file"
+                    # 图片类型压缩到 2MB 以内
+                    if wecom_type == "image" and len(file_bytes) > WECOM_IMAGE_MAX_SIZE:
+                        file_bytes = compress_image(file_bytes)
+                        filename = "telegram_compressed.jpg"
+                    # 文件类型超过 20MB 跳过（企业微信限制）
+                    if wecom_type == "file" and len(file_bytes) > 20 * 1024 * 1024:
+                        logger.warning(f"  Webhook [{idx}] 文件超过 20MB 限制 ({len(file_bytes)} bytes)，跳过媒体推送")
+                        continue
                     mid = await asyncio.to_thread(wecom_upload_media, url, file_bytes, filename, wecom_type)
                     if mid:
                         ok2, err2 = await asyncio.to_thread(wecom_send_media, url, mid, wecom_type)
@@ -512,7 +566,10 @@ def keyword_matches(text, rule):
 
 def format_alert(event, rule_remark, chat_title, sender_name):
     msg = event.message
-    ts = msg.date.strftime("%Y-%m-%d %H:%M:%S") if msg.date else datetime.now(SHANGHAI_TZ).strftime("%Y-%m-%d %H:%M:%S")
+    if msg.date:
+        ts = msg.date.astimezone(SHANGHAI_TZ).strftime("%Y-%m-%d %H:%M:%S")
+    else:
+        ts = datetime.now(SHANGHAI_TZ).strftime("%Y-%m-%d %H:%M:%S")
     text = msg.text or "(无文本/媒体消息)"
     if len(text) > 200:
         text = text[:200] + "..."
@@ -540,6 +597,8 @@ class AsyncMonitor:
         self.client: Optional[TelegramClient] = None
         self.running = False
         self._stop_event = asyncio.Event()
+        self._reconnect_count = 0
+        self._alert_sent = False  # 防止重复告警
 
     def session_path(self):
         phone = self.account.get("phone", "").replace("+", "").replace(" ", "")
@@ -565,30 +624,21 @@ class AsyncMonitor:
             kwargs["proxy"] = proxy_tuple
         return TelegramClient(**kwargs)
 
-    async def start(self):
-        self.client = self.build_client()
-        account_name = self.account.get("remark", "未知")
-        rules = self.account.get("rules", [])
-        webhooks = config.get_webhooks()
-        self._stop_event.clear()
-
-        try:
-            # 1. 连接 Telegram
-            await self.client.connect()
-            # 2. 检查 session 是否已授权
-            if not await self.client.is_user_authorized():
-                logger.error(f"[{account_name}] session 未授权，请先登录")
-                self.running = False
-                return
-            me = await self.client.get_me()
-            logger.info(f"[{account_name}] 监控启动: {get_display_name(me)} (id={me.id})")
-            self.running = True
-        except Exception as e:
-            logger.error(f"[{account_name}] 连接失败: {e}")
-            self.running = False
+    async def _send_disconnect_alert(self, account_name: str, reason: str):
+        """账号掉线时发送告警到 Webhook"""
+        if self._alert_sent:
             return
+        self._alert_sent = True
+        ts = datetime.now(SHANGHAI_TZ).strftime("%Y-%m-%d %H:%M:%S")
+        alert = f"Telegram监控告警\n规则: 账号掉线告警\n时间: {ts} (UTC+8)\n账号: {account_name}\n状态: 已断开\n原因: {reason}"
+        logger.warning(f"[{account_name}] 账号掉线告警: {reason}")
+        webhooks = config.get_webhooks()
+        wh_list = [{"enabled": True, "url": w.get("url", ""), "telegram_bot_token": w.get("telegram_bot_token", ""), "telegram_chat_id": w.get("telegram_chat_id", "")} for w in webhooks if w.get("enabled") and w.get("url")]
+        if wh_list:
+            asyncio.ensure_future(send_webhook_alerts(alert, wh_list, None))
 
-        # 3. 注册事件处理器
+    def _register_handler(self, account_name: str, rules: list, webhooks: list):
+        """注册消息事件处理器（初始连接和重连共用）"""
         @self.client.on(events.NewMessage())
         async def handler(event):
             if self._stop_event.is_set():
@@ -604,7 +654,6 @@ class AsyncMonitor:
                 sender_name = get_display_name(sender) if sender else "(未知)"
                 text = msg.text or ""
                 # 只处理匹配规则的消息
-                matched = False
                 for rule in rules:
                     cm = chat_matches(chat_id, chat_title, rule)
                     if not cm:
@@ -615,7 +664,6 @@ class AsyncMonitor:
                     km = keyword_matches(text, rule)
                     if not km:
                         continue
-                    matched = True
                     logger.info(f"[{account_name}] 收到消息: chat={chat_title}({chat_id}) sender={sender_name}({sender_id}) text={text[:50]}")
                     logger.info(f"[{account_name}] 规则 '{rule.get('remark', '')}': 匹配成功")
                     remark = rule.get("remark", "规则")
@@ -649,8 +697,7 @@ class AsyncMonitor:
                     media_data = None
                     if has_media:
                         try:
-                            # 下载媒体到内存
-                            file_bytes = io.BytesIO()
+                            file_bytes = BytesIO()
                             file_name = await self.client.download_media(msg, file=bytes)
                             if isinstance(file_name, bytes):
                                 file_bytes_val = file_name
@@ -700,15 +747,74 @@ class AsyncMonitor:
             except Exception as e:
                 logger.error(f"[{account_name}] 处理消息异常: {e}")
 
-        # 4. 保持连接
+    async def start(self):
+        self.client = self.build_client()
+        account_name = self.account.get("remark", "未知")
+        rules = self.account.get("rules", [])
+        webhooks = config.get_webhooks()
+        self._stop_event.clear()
+        self._alert_sent = False
+
         try:
-            await self.client.run_until_disconnected()
+            # 1. 连接 Telegram
+            await self.client.connect()
+            # 2. 检查 session 是否已授权
+            if not await self.client.is_user_authorized():
+                logger.error(f"[{account_name}] session 未授权，请先登录")
+                self.running = False
+                return
+            me = await self.client.get_me()
+            logger.info(f"[{account_name}] 监控启动: {get_display_name(me)} (id={me.id})")
+            self.running = True
         except Exception as e:
-            logger.error(f"[{account_name}] 监控断开: {e}")
-        finally:
+            logger.error(f"[{account_name}] 连接失败: {e}")
             self.running = False
-            if self.client:
+            return
+
+        # 3. 注册事件处理器
+        self._register_handler(account_name, rules, webhooks)
+
+        # 4. 保持连接，断线自动重连
+        while not self._stop_event.is_set():
+            try:
+                await self.client.run_until_disconnected()
+            except Exception as e:
+                logger.error(f"[{account_name}] 监控断开: {e}")
+
+            if self._stop_event.is_set():
+                break
+
+            # 断线后尝试重连
+            self._reconnect_count += 1
+            delay = min(5 * (2 ** (self._reconnect_count - 1)), 300)  # 指数退避，最长 5 分钟
+            logger.warning(f"[{account_name}] 连接断开，{delay} 秒后重连 (第 {self._reconnect_count} 次)")
+
+            # 首次断开时发送告警
+            await self._send_disconnect_alert(account_name, f"连接断开，正在重连 (第 {self._reconnect_count} 次)")
+
+            await asyncio.sleep(delay)
+
+            try:
+                self.client = self.build_client()
+                await self.client.connect()
+                if await self.client.is_user_authorized():
+                    me = await self.client.get_me()
+                    logger.info(f"[{account_name}] 重连成功: {get_display_name(me)} (id={me.id})")
+                    self._reconnect_count = 0
+                    self._alert_sent = False  # 重连成功后重置告警标记
+                    self._register_handler(account_name, rules, webhooks)
+                else:
+                    logger.error(f"[{account_name}] 重连失败: session 未授权")
+            except Exception as e:
+                logger.error(f"[{account_name}] 重连失败: {e}")
+                # 继续循环重试
+
+        self.running = False
+        if self.client:
+            try:
                 await self.client.disconnect()
+            except Exception:
+                pass
 
     async def stop(self):
         self._stop_event.set()
