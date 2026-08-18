@@ -711,18 +711,25 @@ def format_alert(event, rule_remark, chat_title, sender_name):
     text = msg.text or "(无文本/媒体消息)"
     if len(text) > 200:
         text = text[:200] + "..."
-    media = ""
     mt = detect_media_type(msg)
-    if mt:
-        media = f"\n媒体: {MEDIA_CN.get(mt, mt)}"
+    mt_cn = MEDIA_CN.get(mt, mt) if mt else ""
     lines = [
-        f"Telegram监控告警",
-        f"规则: {rule_remark}",
-        f"时间: {ts} (UTC+8)",
-        f"群组/频道: {chat_title}",
-        f"发送者: {sender_name}",
-        f"内容: {text}{media}",
+        f"**Telegram 监控告警**",
+        f"**规则**: {rule_remark}",
+        f"**时间**: {ts} (UTC+8)",
+        "",
+        f"**来源**: {chat_title}",
+        f"**发送者**: {sender_name}",
     ]
+    has_text = bool(msg.text and msg.text.strip())
+    if mt and not has_text:
+        # 纯媒体消息（无文字），内容行直接显示媒体类型
+        lines.append(f"**内容**: ({mt_cn})")
+    else:
+        if mt:
+            lines.append(f"**内容**: {text} ({mt_cn})")
+        else:
+            lines.append(f"**内容**: {text}")
     return "\n".join(lines)
 
 
