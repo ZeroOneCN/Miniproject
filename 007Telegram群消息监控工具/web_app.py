@@ -6,6 +6,8 @@ Telegram 多账号监控工具 - Web 管理后台 (FastAPI)
 """
 
 import asyncio
+import io
+from io import BytesIO
 import json
 import logging
 import sqlite3
@@ -16,7 +18,6 @@ import urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
-from io import BytesIO
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
@@ -184,26 +185,34 @@ def init_history_db():
             text TEXT,
             has_media INTEGER DEFAULT 0,
             media_type TEXT DEFAULT '',
+            media_path TEXT DEFAULT '',
             rule_remark TEXT DEFAULT '',
             created_at TEXT DEFAULT (datetime('now', 'localtime'))
         )
     """)
+    # 迁移：旧库补充 media_path 字段
+    try:
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(history)").fetchall()]
+        if "media_path" not in cols:
+            conn.execute("ALTER TABLE history ADD COLUMN media_path TEXT DEFAULT ''")
+    except Exception:
+        pass
     conn.commit()
     conn.close()
 
 
-def save_history(account_name: str, account_idx: int, chat_title: str, chat_id, sender_name: str, sender_id, text: str, has_media: bool, media_type: str, rule_remark: str):
+def save_history(account_name: str, account_idx: int, chat_title: str, chat_id, sender_name: str, sender_id, text: str, has_media: bool, media_type: str, rule_remark: str, media_path: str = ""):
     try:
         conn = sqlite3.connect(str(HISTORY_DB_PATH))
         conn.execute(
-            "INSERT INTO history (ts, account_name, account_idx, chat_title, chat_id, sender_name, sender_id, text, has_media, media_type, rule_remark) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO history (ts, account_name, account_idx, chat_title, chat_id, sender_name, sender_id, text, has_media, media_type, media_path, rule_remark) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 datetime.now(SHANGHAI_TZ).strftime("%Y-%m-%d %H:%M:%S"),
                 str(account_name), int(account_idx),
                 str(chat_title or ""), str(chat_id or ""),
                 str(sender_name or ""), str(sender_id or ""),
                 str(text or ""), 1 if has_media else 0,
-                str(media_type or ""), str(rule_remark or ""),
+                str(media_type or ""), str(media_path or ""), str(rule_remark or ""),
             ]
         )
         conn.commit()
@@ -214,53 +223,6 @@ def save_history(account_name: str, account_idx: int, chat_title: str, chat_id, 
 
 # 启动时初始化
 init_history_db()
-
-
-# ============================================================
-# 媒体压缩（企业微信限制图片 2MB、文件 20MB）
-# ============================================================
-WECOM_IMAGE_MAX_SIZE = 2 * 1024 * 1024  # 2MB
-
-
-def compress_image(file_bytes: bytes, max_size: int = WECOM_IMAGE_MAX_SIZE) -> bytes:
-    """压缩图片到指定大小以内，使用 Pillow 逐步降低质量"""
-    try:
-        from PIL import Image
-    except ImportError:
-        logger.warning("Pillow 未安装，跳过图片压缩")
-        return file_bytes
-
-    if len(file_bytes) <= max_size:
-        return file_bytes
-
-    try:
-        img = Image.open(BytesIO(file_bytes))
-        # 转为 RGB（去掉 alpha 通道，JPEG 不支持透明）
-        if img.mode in ("RGBA", "LA", "P"):
-            img = img.convert("RGB")
-
-        # 逐步降低分辨率和质量
-        for scale in [1.0, 0.8, 0.6, 0.4, 0.3]:
-            w = int(img.width * scale)
-            h = int(img.height * scale)
-            resized = img.resize((w, h), Image.LANCZOS)
-            for quality in [90, 80, 70, 60, 50, 40, 30]:
-                buf = BytesIO()
-                resized.save(buf, format="JPEG", quality=quality, optimize=True)
-                if buf.tell() <= max_size:
-                    logger.info(f"图片压缩成功: {len(file_bytes)} -> {buf.tell()} bytes (scale={scale}, q={quality})")
-                    return buf.getvalue()
-        # 最后兜底：最小尺寸最低质量
-        resized = img.resize((int(img.width * 0.2), int(img.height * 0.2)), Image.LANCZOS)
-        buf = BytesIO()
-        resized.save(buf, format="JPEG", quality=20, optimize=True)
-        result = buf.getvalue()
-        if len(result) > max_size:
-            logger.warning(f"图片压缩后仍超过 2MB: {len(result)} bytes")
-        return result
-    except Exception as e:
-        logger.warning(f"图片压缩失败: {e}")
-        return file_bytes
 
 
 # ============================================================
@@ -449,15 +411,12 @@ async def send_webhook_alerts(alert_text: str, webhooks: list, media_data: Optio
                 filename = media_data.get("filename", "media")
                 media_type = media_data.get("media_type", "file")
                 if file_bytes:
-                    wecom_type = "image" if media_type in ("image", "sticker", "gif") else "file"
-                    # 图片类型压缩到 2MB 以内
-                    if wecom_type == "image" and len(file_bytes) > WECOM_IMAGE_MAX_SIZE:
-                        file_bytes = compress_image(file_bytes)
-                        filename = "telegram_compressed.jpg"
-                    # 文件类型超过 20MB 跳过（企业微信限制）
-                    if wecom_type == "file" and len(file_bytes) > 20 * 1024 * 1024:
-                        logger.warning(f"  Webhook [{idx}] 文件超过 20MB 限制 ({len(file_bytes)} bytes)，跳过媒体推送")
-                        continue
+                    if media_type in ("image", "sticker", "gif"):
+                        wecom_type = "image"
+                    elif media_type == "video":
+                        wecom_type = "video"
+                    else:
+                        wecom_type = "file"
                     mid = await asyncio.to_thread(wecom_upload_media, url, file_bytes, filename, wecom_type)
                     if mid:
                         ok2, err2 = await asyncio.to_thread(wecom_send_media, url, mid, wecom_type)
@@ -564,6 +523,66 @@ def keyword_matches(text, rule):
     return True
 
 
+MEDIA_CN = {
+    "image": "图片",
+    "video": "视频",
+    "sticker": "贴纸",
+    "gif": "GIF",
+    "document": "文件",
+    "other": "其他",
+}
+
+
+def detect_media_type(msg) -> str:
+    """判断消息媒体类型，返回内部英文类型"""
+    if msg.photo:
+        return "image"
+    if msg.sticker:
+        return "sticker"
+    if msg.gif:
+        return "gif"
+    if msg.video:
+        return "video"
+    if msg.document:
+        mime = (getattr(msg.document, "mime_type", "") or "").lower()
+        if mime.startswith("image/"):
+            return "image"
+        if mime.startswith("video/"):
+            return "video"
+        return "document"
+    if msg.media:
+        return "other"
+    return ""
+
+
+def media_ext(msg, media_type: str) -> str:
+    """根据媒体类型推断文件扩展名"""
+    if media_type == "image":
+        # 图片：优先取 mime，其次用文件扩展名
+        if msg.document:
+            mime = (getattr(msg.document, "mime_type", "") or "").lower()
+            ext_map = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
+                       "image/gif": ".gif", "image/bmp": ".bmp"}
+            if mime in ext_map:
+                return ext_map[mime]
+            if mime.startswith("image/"):
+                return "." + mime.split("/")[1].replace("jpeg", "jpg")
+        return ".jpg"
+    if media_type == "video":
+        return ".mp4"
+    if media_type == "sticker":
+        return ".webp"
+    if media_type == "gif":
+        return ".gif"
+    # 文档/文件：取原始文件名扩展名
+    if msg.document:
+        for attr in getattr(msg.document, "attributes", []) or []:
+            fn = getattr(attr, "file_name", None)
+            if fn:
+                return Path(fn).suffix or ".bin"
+    return ".bin"
+
+
 def format_alert(event, rule_remark, chat_title, sender_name):
     msg = event.message
     if msg.date:
@@ -574,8 +593,9 @@ def format_alert(event, rule_remark, chat_title, sender_name):
     if len(text) > 200:
         text = text[:200] + "..."
     media = ""
-    if msg.media:
-        media = f"\n媒体: {type(msg.media).__name__}"
+    mt = detect_media_type(msg)
+    if mt:
+        media = f"\n媒体: {MEDIA_CN.get(mt, mt)}"
     lines = [
         f"Telegram监控告警",
         f"规则: {rule_remark}",
@@ -597,8 +617,6 @@ class AsyncMonitor:
         self.client: Optional[TelegramClient] = None
         self.running = False
         self._stop_event = asyncio.Event()
-        self._reconnect_count = 0
-        self._alert_sent = False  # 防止重复告警
 
     def session_path(self):
         phone = self.account.get("phone", "").replace("+", "").replace(" ", "")
@@ -624,21 +642,30 @@ class AsyncMonitor:
             kwargs["proxy"] = proxy_tuple
         return TelegramClient(**kwargs)
 
-    async def _send_disconnect_alert(self, account_name: str, reason: str):
-        """账号掉线时发送告警到 Webhook"""
-        if self._alert_sent:
-            return
-        self._alert_sent = True
-        ts = datetime.now(SHANGHAI_TZ).strftime("%Y-%m-%d %H:%M:%S")
-        alert = f"Telegram监控告警\n规则: 账号掉线告警\n时间: {ts} (UTC+8)\n账号: {account_name}\n状态: 已断开\n原因: {reason}"
-        logger.warning(f"[{account_name}] 账号掉线告警: {reason}")
+    async def start(self):
+        self.client = self.build_client()
+        account_name = self.account.get("remark", "未知")
+        rules = self.account.get("rules", [])
         webhooks = config.get_webhooks()
-        wh_list = [{"enabled": True, "url": w.get("url", ""), "telegram_bot_token": w.get("telegram_bot_token", ""), "telegram_chat_id": w.get("telegram_chat_id", "")} for w in webhooks if w.get("enabled") and w.get("url")]
-        if wh_list:
-            asyncio.ensure_future(send_webhook_alerts(alert, wh_list, None))
+        self._stop_event.clear()
 
-    def _register_handler(self, account_name: str, rules: list, webhooks: list):
-        """注册消息事件处理器（初始连接和重连共用）"""
+        try:
+            # 1. 连接 Telegram
+            await self.client.connect()
+            # 2. 检查 session 是否已授权
+            if not await self.client.is_user_authorized():
+                logger.error(f"[{account_name}] session 未授权，请先登录")
+                self.running = False
+                return
+            me = await self.client.get_me()
+            logger.info(f"[{account_name}] 监控启动: {get_display_name(me)} (id={me.id})")
+            self.running = True
+        except Exception as e:
+            logger.error(f"[{account_name}] 连接失败: {e}")
+            self.running = False
+            return
+
+        # 3. 注册事件处理器
         @self.client.on(events.NewMessage())
         async def handler(event):
             if self._stop_event.is_set():
@@ -654,6 +681,7 @@ class AsyncMonitor:
                 sender_name = get_display_name(sender) if sender else "(未知)"
                 text = msg.text or ""
                 # 只处理匹配规则的消息
+                matched = False
                 for rule in rules:
                     cm = chat_matches(chat_id, chat_title, rule)
                     if not cm:
@@ -664,6 +692,7 @@ class AsyncMonitor:
                     km = keyword_matches(text, rule)
                     if not km:
                         continue
+                    matched = True
                     logger.info(f"[{account_name}] 收到消息: chat={chat_title}({chat_id}) sender={sender_name}({sender_id}) text={text[:50]}")
                     logger.info(f"[{account_name}] 规则 '{rule.get('remark', '')}': 匹配成功")
                     remark = rule.get("remark", "规则")
@@ -675,67 +704,31 @@ class AsyncMonitor:
                             logger.info(f"[{account_name}] 已转发到 Saved Messages")
                         except Exception as e:
                             logger.error(f"[{account_name}] 转发失败: {e}")
-                    # 保存历史记录
-                    has_media = bool(msg.media)
-                    media_type = ""
-                    if has_media:
-                        if msg.photo:
-                            media_type = "image"
-                        elif msg.video:
-                            media_type = "video"
-                        elif msg.document:
-                            media_type = "document"
-                        elif msg.sticker:
-                            media_type = "sticker"
-                        elif msg.gif:
-                            media_type = "gif"
-                        else:
-                            media_type = "other"
-                    save_history(account_name, self.account_idx, chat_title, chat_id,
-                                 sender_name, sender_id, text, has_media, media_type, remark)
-                    # 下载媒体用于 Webhook 推送
+                    # 检测媒体类型
+                    media_type = detect_media_type(msg)
+                    has_media = bool(media_type)
+                    # 下载媒体（用于 Webhook 推送 + 网页展示存档）
                     media_data = None
+                    media_path = ""
                     if has_media:
                         try:
-                            file_bytes = BytesIO()
-                            file_name = await self.client.download_media(msg, file=bytes)
-                            if isinstance(file_name, bytes):
-                                file_bytes_val = file_name
-                            else:
-                                file_bytes_val = file_bytes.getvalue()
-                            ext = ""
-                            if msg.photo:
-                                ext = ".jpg"
-                                media_type2 = "image"
-                            elif msg.sticker:
-                                # 贴纸下载后转换为 JPG，企业微信不支持 webp
-                                ext = ".jpg"
-                                media_type2 = "image"
-                            elif msg.video:
-                                ext = ".mp4"
-                                media_type2 = "video"
-                            elif msg.document:
-                                ext = Path(getattr(msg.document, 'attributes', [{}])[0].get('file_name', 'file') if isinstance(getattr(msg.document, 'attributes', [{}])[0], dict) else 'file').suffix or ".bin"
-                                media_type2 = "file"
-                            else:
-                                ext = ".bin"
-                                media_type2 = "file"
+                            # 下载媒体到内存
+                            file_bytes_val = await self.client.download_media(msg, file=bytes)
+                            if not isinstance(file_bytes_val, bytes):
+                                file_bytes_val = None
                             if file_bytes_val:
-                                # 贴纸 webp 转 jpg
-                                if msg.sticker:
-                                    try:
-                                        from PIL import Image
-                                        img = Image.open(BytesIO(file_bytes_val))
-                                        if img.mode in ("RGBA", "LA", "P"):
-                                            img = img.convert("RGB")
-                                        buf = BytesIO()
-                                        img.save(buf, format="JPEG", quality=90)
-                                        file_bytes_val = buf.getvalue()
-                                    except Exception as e:
-                                        logger.warning(f"[{account_name}] 贴纸转换失败: {e}")
-                                media_data = {"bytes": file_bytes_val, "filename": f"telegram{ext}", "media_type": media_type2}
+                                ext = media_ext(msg, media_type)
+                                # 存到本地 media 目录，供网页展示
+                                media_dir = BASE_DIR / "media"
+                                media_dir.mkdir(parents=True, exist_ok=True)
+                                fname = f"{msg.id}_{int(datetime.now().timestamp())}{ext}"
+                                (media_dir / fname).write_bytes(file_bytes_val)
+                                media_path = f"/media/{fname}"
+                                media_data = {"bytes": file_bytes_val, "filename": f"telegram{ext}", "media_type": media_type}
                         except Exception as e:
                             logger.warning(f"[{account_name}] 下载媒体失败: {e}")
+                    save_history(account_name, self.account_idx, chat_title, chat_id,
+                                 sender_name, sender_id, text, has_media, media_type, remark, media_path)
                     # Webhook（规则级 + 全局，相同 URL 去重）
                     wh_list = []
                     seen_urls = set()
@@ -760,74 +753,15 @@ class AsyncMonitor:
             except Exception as e:
                 logger.error(f"[{account_name}] 处理消息异常: {e}")
 
-    async def start(self):
-        self.client = self.build_client()
-        account_name = self.account.get("remark", "未知")
-        rules = self.account.get("rules", [])
-        webhooks = config.get_webhooks()
-        self._stop_event.clear()
-        self._alert_sent = False
-
+        # 4. 保持连接
         try:
-            # 1. 连接 Telegram
-            await self.client.connect()
-            # 2. 检查 session 是否已授权
-            if not await self.client.is_user_authorized():
-                logger.error(f"[{account_name}] session 未授权，请先登录")
-                self.running = False
-                return
-            me = await self.client.get_me()
-            logger.info(f"[{account_name}] 监控启动: {get_display_name(me)} (id={me.id})")
-            self.running = True
+            await self.client.run_until_disconnected()
         except Exception as e:
-            logger.error(f"[{account_name}] 连接失败: {e}")
+            logger.error(f"[{account_name}] 监控断开: {e}")
+        finally:
             self.running = False
-            return
-
-        # 3. 注册事件处理器
-        self._register_handler(account_name, rules, webhooks)
-
-        # 4. 保持连接，断线自动重连
-        while not self._stop_event.is_set():
-            try:
-                await self.client.run_until_disconnected()
-            except Exception as e:
-                logger.error(f"[{account_name}] 监控断开: {e}")
-
-            if self._stop_event.is_set():
-                break
-
-            # 断线后尝试重连
-            self._reconnect_count += 1
-            delay = min(5 * (2 ** (self._reconnect_count - 1)), 300)  # 指数退避，最长 5 分钟
-            logger.warning(f"[{account_name}] 连接断开，{delay} 秒后重连 (第 {self._reconnect_count} 次)")
-
-            # 首次断开时发送告警
-            await self._send_disconnect_alert(account_name, f"连接断开，正在重连 (第 {self._reconnect_count} 次)")
-
-            await asyncio.sleep(delay)
-
-            try:
-                self.client = self.build_client()
-                await self.client.connect()
-                if await self.client.is_user_authorized():
-                    me = await self.client.get_me()
-                    logger.info(f"[{account_name}] 重连成功: {get_display_name(me)} (id={me.id})")
-                    self._reconnect_count = 0
-                    self._alert_sent = False  # 重连成功后重置告警标记
-                    self._register_handler(account_name, rules, webhooks)
-                else:
-                    logger.error(f"[{account_name}] 重连失败: session 未授权")
-            except Exception as e:
-                logger.error(f"[{account_name}] 重连失败: {e}")
-                # 继续循环重试
-
-        self.running = False
-        if self.client:
-            try:
+            if self.client:
                 await self.client.disconnect()
-            except Exception:
-                pass
 
     async def stop(self):
         self._stop_event.set()
@@ -1396,7 +1330,7 @@ def get_history(account_idx: int = -1, page: int = 1, page_size: int = 20,
     # 分页
     offset = (page - 1) * page_size
     rows = conn.execute(
-        f"SELECT id, ts, account_name, account_idx, chat_title, chat_id, sender_name, sender_id, text, has_media, media_type, rule_remark FROM history {where} ORDER BY id DESC LIMIT ? OFFSET ?",
+        f"SELECT id, ts, account_name, account_idx, chat_title, chat_id, sender_name, sender_id, text, has_media, media_type, media_path, rule_remark FROM history {where} ORDER BY id DESC LIMIT ? OFFSET ?",
         params + [page_size, offset]
     ).fetchall()
     conn.close()
@@ -1405,7 +1339,7 @@ def get_history(account_idx: int = -1, page: int = 1, page_size: int = 20,
         items.append({
             "id": r[0], "ts": r[1], "account_name": r[2], "account_idx": r[3],
             "chat_title": r[4], "chat_id": r[5], "sender_name": r[6], "sender_id": r[7],
-            "text": r[8], "has_media": bool(r[9]), "media_type": r[10], "rule_remark": r[11],
+            "text": r[8], "has_media": bool(r[9]), "media_type": r[10], "media_path": r[11] or "", "rule_remark": r[12],
         })
     return {"items": items, "total": count, "page": page, "page_size": page_size}
 
@@ -1458,6 +1392,17 @@ async def logo():
     if svg_path.exists():
         return FileResponse(svg_path, media_type="image/svg+xml")
     return HTMLResponse("")
+
+
+@app.get("/media/{filename}")
+async def get_media(filename: str):
+    """提供监控消息媒体文件（图片/视频/文件）"""
+    media_dir = BASE_DIR / "media"
+    file_path = (media_dir / filename).resolve()
+    # 防目录穿越
+    if not str(file_path).startswith(str(media_dir.resolve())) or not file_path.exists():
+        raise HTTPException(status_code=404, detail="not found")
+    return FileResponse(str(file_path))
 
 
 # ============================================================
