@@ -26,3 +26,4 @@ Thumbs.db
 # CameraMotionCapture specific
 **/recordings/
 *.err
+.trae/
