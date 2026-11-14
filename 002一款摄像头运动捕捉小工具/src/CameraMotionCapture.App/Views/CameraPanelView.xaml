@@ -1,0 +1,176 @@
+<UserControl x:Class="CameraMotionCapture.App.Views.CameraPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:CameraMotionCapture.App.Converters">
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="Vis" />
+        <conv:InverseBoolToVisibilityConverter x:Key="InvVis" />
+        <conv:BoolToColorConverter x:Key="RecColor" />
+    </UserControl.Resources>
+
+    <Border Margin="4" CornerRadius="8" Background="{StaticResource VideoBack}"
+            BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" ClipToBounds="True">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- ══════ 标题栏 ══════ -->
+            <Border Grid.Row="0" Background="{StaticResource VideoChrome}" Padding="10,6">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 状态灯 -->
+                    <Ellipse Grid.Column="0" Width="8" Height="8" VerticalAlignment="Center"
+                             Fill="{Binding StatusBrush}" Margin="0,0,8,0" />
+
+                    <TextBlock Grid.Column="1" Text="{Binding CameraName}"
+                               Foreground="{StaticResource VideoText}" FontSize="12.5"
+                               FontWeight="SemiBold" VerticalAlignment="Center" />
+
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding DisplayTarget}" FontSize="11"
+                                   Foreground="#7C838F" Margin="0,0,10,0" VerticalAlignment="Center" />
+
+                        <Border Background="#2AF0F0F0" CornerRadius="3" Padding="5,1" Margin="0,0,8,0"
+                                Visibility="{Binding ShowFaceCount, Converter={StaticResource Vis}}">
+                            <TextBlock FontSize="10.5" Foreground="#8BE08B">
+                                <Run Text="人脸 " /><Run Text="{Binding FaceCount, Mode=OneWay}" />
+                            </TextBlock>
+                        </Border>
+
+                        <TextBlock Text="{Binding Fps, StringFormat={}{0:F0} fps}" FontSize="11"
+                                   Foreground="#7C838F" VerticalAlignment="Center" Margin="0,0,10,0" />
+
+                        <Ellipse Width="7" Height="7" VerticalAlignment="Center" Margin="0,0,4,0"
+                                 Fill="{Binding IsRecording, Converter={StaticResource RecColor}}" />
+                        <TextBlock Text="REC" FontSize="10" Foreground="#8A909B"
+                                   VerticalAlignment="Center" Margin="0,0,10,0" />
+
+                        <Button Content="⛶" Style="{StaticResource ChromeButton}" FontSize="13"
+                                Command="{Binding FullscreenCommand}" ToolTip="全屏（F11）" />
+                        <Button Content="✕" Style="{StaticResource ChromeButton}"
+                                Command="{Binding DataContext.RemoveCameraCommand,
+                                          RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}"
+                                ToolTip="移除此摄像头" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ══════ 画面 ══════ -->
+            <!-- 不用 ScrollViewer：它给子元素的测量约束是无限大，Stretch=Uniform 不会把画面缩到面板大小，
+                 而是按原始像素尺寸溢出后被裁切。缩放/平移统一交给 RenderTransform，数学在 code-behind 里算。 -->
+            <Grid Grid.Row="1" Background="{StaticResource VideoBack}" ClipToBounds="True"
+                  SizeChanged="PreviewHost_SizeChanged"
+                  MouseWheel="PreviewImage_MouseWheel"
+                  MouseDown="PreviewImage_MouseDown"
+                  MouseMove="PreviewImage_MouseMove"
+                  MouseUp="PreviewImage_MouseUp"
+                  MouseLeave="PreviewImage_MouseLeave">
+                <Image x:Name="PreviewImage"
+                       Source="{Binding CameraImage}"
+                       Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="HighQuality"
+                       RenderTransformOrigin="0,0">
+                    <Image.RenderTransform>
+                        <TransformGroup>
+                            <ScaleTransform x:Name="ZoomTransform" ScaleX="1" ScaleY="1" />
+                            <TranslateTransform x:Name="PanTransform" X="0" Y="0" />
+                        </TransformGroup>
+                    </Image.RenderTransform>
+                </Image>
+
+                <!-- 空状态 -->
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                            IsHitTestVisible="False">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding CameraImage}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <TextBlock Text="{Binding StatusText}" Foreground="#5C636E" FontSize="13"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
+
+                <!-- 运动提示 -->
+                <Border VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,10,0,0"
+                        Padding="10,3" CornerRadius="10" Background="#CCE0524B"
+                        Visibility="{Binding MotionActive, Converter={StaticResource Vis}}">
+                    <TextBlock Text="检测到运动" Foreground="White" FontSize="11" FontWeight="SemiBold" />
+                </Border>
+
+                <!-- 录制提示 -->
+                <Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="0,10,10,0"
+                        Padding="8,3" CornerRadius="10" Background="#CCB03030"
+                        Visibility="{Binding IsRecording, Converter={StaticResource Vis}}">
+                    <TextBlock Text="● 录制中" Foreground="White" FontSize="10.5" />
+                </Border>
+
+                <!-- 停止遮罩：设备已关闭，画面是最后一帧，必须让人一眼看出来不是"卡了" -->
+                <Border Background="#C412151B" IsHitTestVisible="False"
+                        Visibility="{Binding IsStopped, Converter={StaticResource Vis}}" />
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                            IsHitTestVisible="False"
+                            Visibility="{Binding IsStopped, Converter={StaticResource Vis}}">
+                    <TextBlock Text="已停止采集" FontSize="14" FontWeight="SemiBold"
+                               Foreground="#EDEFF3" HorizontalAlignment="Center" />
+                    <TextBlock Text="摄像头已释放 · 点下方「开始监控」重新连接"
+                               FontSize="11.5" Foreground="#8A909B"
+                               Margin="0,6,0,0" HorizontalAlignment="Center" />
+                </StackPanel>
+            </Grid>
+
+            <!-- ══════ 底部操作条 ══════ -->
+            <Border Grid.Row="2" Background="{StaticResource VideoChrome}" Padding="6,4">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <Button Content="开始监控" Style="{StaticResource ChromeButton}"
+                                Command="{Binding StartCommand}"
+                                Visibility="{Binding IsMonitoring, Converter={StaticResource InvVis}}" />
+                        <Button Content="停止监控" Style="{StaticResource ChromeButton}"
+                                Command="{Binding StopCommand}"
+                                Visibility="{Binding IsMonitoring, Converter={StaticResource Vis}}" />
+                        <TextBlock Text="·" Foreground="#4A4F58" VerticalAlignment="Center" Margin="2,0" />
+                        <Button Content="抓拍" Style="{StaticResource ChromeButton}"
+                                Command="{Binding SnapshotCommand}" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Column="1" Text="{Binding StatusText}" FontSize="11"
+                               Foreground="#7C838F" VerticalAlignment="Center"
+                               HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal">
+                        <Button Content="−" Style="{StaticResource ChromeButton}"
+                                Command="{Binding ZoomOutCommand}" ToolTip="缩小" />
+                        <TextBlock Text="{Binding ZoomText}" FontSize="10.5" Foreground="#7C838F"
+                                   VerticalAlignment="Center" Margin="2,0" MinWidth="30"
+                                   TextAlignment="Center" />
+                        <Button Content="+" Style="{StaticResource ChromeButton}"
+                                Command="{Binding ZoomInCommand}" ToolTip="放大" />
+                        <Button Content="⟲" Style="{StaticResource ChromeButton}"
+                                Command="{Binding ZoomResetCommand}" ToolTip="重置缩放" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

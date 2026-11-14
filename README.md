@@ -20,7 +20,7 @@
 | ID | 工具名称 | 核心功能 | 技术栈 |
 |:--:|:--------|:---------|:-------|
 | **001** | **论文降重助手** | 智能文本改写、同义词替换、查重对比 | `Python`, `API` |
-| **002** | **摄像头监控系统** | 多摄像头监控、运动检测、人脸识别、录像存储、企业微信通知 | `C#`, `.NET 10`, `WPF`, `OpenCvSharp4` |
+| **002** | **摄像头监控台** | 多摄像头监控、运动检测、人脸检测、录像抓拍、企业微信通知 | `C#`, `.NET 10`, `WPF`, `OpenCvSharp4` |
 | **003** | **端口占用查看器** | 端口扫描、进程关联、一键结束进程、命令行查看 | `C#`, `.NET 10`, `WPF`, `P/Invoke` |
 | **004** | **屏幕关闭管理** | 屏幕关闭时间设置、电源方案管理、一键快捷操作 | `C#`, `.NET 10`, `WPF`, `MVVM` |
 | **005** | **身份证校验器** | 身份证格式/日期/校验位校验、批量验证 | `Python`, `PyQt6` |
@@ -67,16 +67,17 @@ Pythonproject/
 │   ├── images/           # 截图
 │   ├── README.md         # 独立文档
 │   └── main.py           # Python 入口
-├── 002-工具目录/
-│   ├── ToolName/          # C# 解决方案目录
-│   │   ├── ToolName.slnx
-│   │   └── src/
-│   │       └── ToolName/
-│   │           ├── Models/
-│   │           ├── Services/
-│   │           ├── ViewModels/
-│   │           └── Views/
-│   ├── images/
+├── 002-工具目录/          # C# 示例
+│   ├── ToolName.slnx     # 解决方案
+│   ├── src/              # 全部项目源码
+│   │   └── ToolName/
+│   │       ├── Models/
+│   │       ├── Services/
+│   │       ├── ViewModels/
+│   │       └── Views/
+│   ├── assets/           # 图标、截图等资源
+│   ├── models/           # 模型文件（如 OpenCV 级联）
+│   ├── dist/             # 打包产物（不入库）
 │   └── README.md
 ├── ...                   # 更多工具
 └── README.md             # 本文档
@@ -92,18 +93,18 @@ Pythonproject/
 
 ```
 00X-工具名称/
-├── images/              # 程序截图、演示素材
 ├── README.md            # 独立说明文档
 ├── 主程序.py             # Python 入口文件
-└── ToolName/             # C# 解决方案目录
-    ├── ToolName.slnx     # 解决方案文件
-    └── src/
-        └── ToolName/     # 项目源码
-            ├── Models/
-            ├── Services/
-            ├── ViewModels/
-            ├── Views/
-            └── ...
+└── ToolName.slnx        # C# 解决方案（C# 工具）
+    ├── src/             # 项目源码
+    │   └── ToolName/
+    │       ├── Models/
+    │       ├── Services/
+    │       ├── ViewModels/
+    │       └── Views/
+    ├── assets/          # 图标、截图等静态资源
+    ├── models/          # 模型文件
+    └── dist/            # 打包产物（.gitignore 忽略）
 ```
 
 ### 贡献指南

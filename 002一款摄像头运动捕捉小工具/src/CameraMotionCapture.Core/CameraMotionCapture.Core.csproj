@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\CameraMotionCapture.Shared\CameraMotionCapture.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
+    <PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" />
+    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.13.0.20260627" />
+    <PackageReference Include="Serilog" Version="4.4.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+  </ItemGroup>
+
+  <!-- 人脸模型内嵌进程序集：单文件发布时也不用额外带一个 xml -->
+  <ItemGroup Condition="Exists('..\..\models\haarcascade_frontalface_default.xml')">
+    <EmbeddedResource Include="..\..\models\haarcascade_frontalface_default.xml">
+      <LogicalName>haarcascade_frontalface_default.xml</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- 本项目只服务于 Windows 上的 WPF 应用（OpenCvSharp 摄像头采集 + DirectShow 设备枚举），
+         跨平台可用性分析没有意义，屏蔽 CA1416 -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+
+</Project>

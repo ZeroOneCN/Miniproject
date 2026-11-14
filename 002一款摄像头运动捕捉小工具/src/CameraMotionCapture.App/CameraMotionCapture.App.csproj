@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>摄像头监控台</AssemblyName>
+    <RootNamespace>CameraMotionCapture.App</RootNamespace>
+    <Version>2.2.0</Version>
+    <Product>摄像头监控台</Product>
+    <Company>CameraMonitor</Company>
+    <Description>轻量级多路摄像头监控台</Description>
+    <!-- 图标源文件统一放在仓库根 assets/，项目只做引用 -->
+    <ApplicationIcon>..\..\assets\app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CameraMotionCapture.Core\CameraMotionCapture.Core.csproj" />
+  </ItemGroup>
+
+  <!-- 界面品牌角标：Link 保证 XAML 里的 pack URI 仍是 /Resources/app-icon.png -->
+  <ItemGroup>
+    <Resource Include="..\..\assets\app-icon.png">
+      <Link>Resources\app-icon.png</Link>
+    </Resource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Ookii.Dialogs.Wpf" Version="5.0.1" />
+  </ItemGroup>
+
+</Project>
