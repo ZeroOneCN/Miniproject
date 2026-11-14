@@ -9,7 +9,18 @@
     <AssemblyName>PortMonitor</AssemblyName>
     <RootNamespace>PortMonitor</RootNamespace>
     <ApplicationIcon>Resources\app_icon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
 
+    <Version>2.0.0</Version>
+    <AssemblyVersion>2.0.0.0</AssemblyVersion>
+    <FileVersion>2.0.0.0</FileVersion>
+    <Product>端口占用与文件句柄管理</Product>
+    <Company>ZeroOneCN</Company>
+    <Copyright>Copyright © 2026</Copyright>
+  </PropertyGroup>
+
+  <!-- 调试符号只在 Release 下关闭：Debug 保留 pdb，否则崩溃无从定位 -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>

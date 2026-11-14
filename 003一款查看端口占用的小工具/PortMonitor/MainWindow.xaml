@@ -3,40 +3,34 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:PortMonitor"
         mc:Ignorable="d"
-        Title="端口占用与进程管理 v1.0"
-        MinWidth="800" MinHeight="560"
-        Width="860" Height="600"
+        Title="{Binding AppTitle}"
+        Width="1000" Height="700"
+        ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen"
-        FontFamily="Microsoft YaHei" FontSize="13"
+        FontFamily="Microsoft YaHei UI, Microsoft YaHei, Segoe UI"
+        FontSize="13"
+        Background="#F4F5F7"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display">
 
-    <Window.Resources>
-        <ResourceDictionary>
-            <local:EmptyStringConverter x:Key="EmptyStringConverter" />
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="pack://application:,,,/PortMonitor;component/Resources/Styles.xaml" />
-            </ResourceDictionary.MergedDictionaries>
-        </ResourceDictionary>
-    </Window.Resources>
-
-    <Grid Margin="10">
+    <Grid Margin="14,12,14,12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" MinHeight="200" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- ═══ Title ═══ -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6">
-            <Viewbox Width="24" Height="24" Margin="0,0,8,0">
+        <!-- ═══ 顶栏：标题 + 权限 ═══ -->
+        <Grid Grid.Row="0" Margin="2,0,2,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Viewbox Grid.Column="0" Width="30" Height="30" VerticalAlignment="Center">
                 <Canvas Width="24" Height="24">
-                    <!-- 网络端口 SVG 图标 -->
                     <Path Fill="#2C3E50" Data="M3,3 L21,3 L21,21 L3,21 Z" />
                     <Path Fill="#3498DB" Data="M5,5 L19,5 L19,9 L5,9 Z" />
                     <Path Fill="#ECF0F1" Data="M6,6 L11,6 L11,8 L6,8 Z" />
@@ -47,134 +41,279 @@
                     <Path Fill="#2ECC71" Data="M13,16 L17,16 L17,18 L13,18 Z" />
                 </Canvas>
             </Viewbox>
-            <TextBlock Text="端口占用与进程管理"
-                       FontSize="18" FontWeight="Bold"
-                       VerticalAlignment="Center" />
-        </StackPanel>
 
-        <!-- ═══ Query Frame ═══ -->
-        <GroupBox Grid.Row="1" Header="端口查询" Padding="8" Margin="0,0,0,6">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="100" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="100" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="{Binding AppTitle}" FontSize="17" FontWeight="SemiBold" Foreground="#111827" />
+                <TextBlock Text="端口占用查询 · 文件句柄占用定位" Style="{StaticResource HintTextStyle}" Margin="0,2,0,0" />
+            </StackPanel>
 
-                <Label Grid.Column="0" Content="端口号" VerticalAlignment="Center" />
-                <TextBox Grid.Column="1" x:Name="PortTextBox"
-                         Text="{Binding PortText, UpdateSourceTrigger=PropertyChanged}"
-                         VerticalContentAlignment="Center"
-                         Height="26" />
-
-                <Label Grid.Column="2" Content="协议" VerticalAlignment="Center" Margin="10,0,0,0" />
-                <ComboBox Grid.Column="3" x:Name="ProtocolComboBox"
-                          ItemsSource="{Binding ProtocolFilterOptions}"
-                          SelectedIndex="{Binding SelectedFilterIndex}"
-                          IsEditable="False"
-                          Height="26" />
-
-                <Button Grid.Column="4" Content="检查端口"
-                        Command="{Binding CheckPortCommand}"
-                        Style="{StaticResource NormalButtonStyle}"
-                        Margin="10,0,0,0" />
-
-                <Button Grid.Column="5" Content="刷新"
-                        Command="{Binding CheckPortCommand}"
-                        Style="{StaticResource NormalButtonStyle}"
-                        Margin="6,0,0,0" />
-
-                <Button Grid.Column="6" Content="清空结果"
-                        Command="{Binding ClearResultsCommand}"
-                        Style="{StaticResource NormalButtonStyle}"
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Background="#EEF2FF" CornerRadius="10" Padding="9,3" ToolTip="{Binding PrivilegeTip}">
+                    <TextBlock Text="{Binding PrivilegeText}" FontSize="11.5" Foreground="#1D4ED8" />
+                </Border>
+                <Button Content="以管理员身份重启"
+                        Style="{StaticResource GhostButtonStyle}"
+                        Command="{Binding ElevateCommand}"
                         Margin="6,0,0,0"
-                        HorizontalAlignment="Left" />
-            </Grid>
-        </GroupBox>
+                        ToolTip="提权后可结束系统进程、执行句柄深度扫描"
+                        Visibility="{Binding IsAdministrator, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=invert}" />
+            </StackPanel>
+        </Grid>
 
-        <!-- ═══ Options ═══ -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,4">
-            <CheckBox Content="自动刷新 (2秒)"
-                      IsChecked="{Binding IsAutoRefresh}"
-                      VerticalAlignment="Center" />
-            <CheckBox Content="显示命令行"
-                      IsChecked="{Binding ShowCmdLine}"
-                      VerticalAlignment="Center"
-                      Margin="14,0,0,0" />
-        </StackPanel>
+        <!-- ═══ 主功能页 ═══ -->
+        <TabControl Grid.Row="1" Background="Transparent" BorderThickness="0" Padding="0">
 
-        <!-- ═══ DataGrid ═══ -->
-        <DataGrid Grid.Row="3"
-                  ItemsSource="{Binding Connections}"
-                  AutoGenerateColumns="False"
-                  IsReadOnly="True"
-                  SelectionMode="Single"
-                  EnableRowVirtualization="True"
-                  VirtualizingPanel.ScrollUnit="Pixel"
-                  GridLinesVisibility="Horizontal"
-                  HeadersVisibility="Column"
-                  RowHeaderWidth="0"
-                  Margin="0,0,0,6"
-                  x:Name="ConnectionsGrid"
-                  SelectionChanged="ConnectionsGrid_SelectionChanged">
+            <!-- ─────────────── 端口占用 ─────────────── -->
+            <TabItem Header="端口占用" DataContext="{Binding Port}" Padding="14,6">
+                <Grid Margin="0,8,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-            <DataGrid.Resources>
-                <Style TargetType="DataGridRow">
-                    <Setter Property="MinHeight" Value="24" />
-                </Style>
-            </DataGrid.Resources>
+                    <!-- 查询条件 -->
+                    <Border Grid.Row="0" Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="端口号" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBox x:Name="PortTextBox" Width="104" Height="30" MaxLength="5"
+                                         VerticalContentAlignment="Center"
+                                         Text="{Binding PortText, UpdateSourceTrigger=PropertyChanged}">
+                                    <TextBox.InputBindings>
+                                        <KeyBinding Key="Enter" Command="{Binding CheckCommand}" />
+                                    </TextBox.InputBindings>
+                                </TextBox>
 
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="PID" Width="70"
-                                    Binding="{Binding Pid}" />
-                <DataGridTextColumn Header="进程" Width="150"
-                                    Binding="{Binding ProcessName}" />
-                <DataGridTextColumn Header="协议" Width="60"
-                                    Binding="{Binding ProtocolName}" />
-                <DataGridTextColumn Header="本地地址" Width="*"
-                                    Binding="{Binding LocalAddress}" />
-                <DataGridTextColumn Header="远端地址" Width="180"
-                                    Binding="{Binding DisplayRemoteAddress, Converter={StaticResource EmptyStringConverter}}" />
-            </DataGrid.Columns>
-        </DataGrid>
+                                <TextBlock Text="协议" VerticalAlignment="Center" Margin="14,0,8,0" />
+                                <ComboBox Width="92" Height="30" VerticalContentAlignment="Center"
+                                          ItemsSource="{Binding ProtocolOptions}"
+                                          SelectedIndex="{Binding SelectedFilterIndex}" />
 
-        <!-- ═══ Detail Frame ═══ -->
-        <GroupBox Grid.Row="4" Header="命令行详情" Padding="6" Margin="0,0,0,6">
-            <TextBox Text="{Binding DetailText, Mode=OneWay}"
-                     IsReadOnly="True"
-                     TextWrapping="Wrap"
-                     AcceptsReturn="False"
-                     VerticalScrollBarVisibility="Auto"
-                     MinHeight="40"
-                     MaxHeight="80"
-                     Background="#F5F5F5"
-                     BorderThickness="0" />
-        </GroupBox>
+                                <Button Content="检查端口" Style="{StaticResource PrimaryButtonStyle}"
+                                        Command="{Binding CheckCommand}" Margin="14,0,0,0" />
+                                <Button Content="清空结果" Style="{StaticResource NormalButtonStyle}"
+                                        Command="{Binding ClearCommand}" Margin="8,0,0,0" />
 
-        <!-- ═══ Action Buttons ═══ -->
-        <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,0,0,6">
-            <Button Content="结束进程"
-                    Command="{Binding KillProcessCommand}"
-                    Style="{StaticResource DangerButtonStyle}" />
-            <Button Content="复制 PID"
-                    Command="{Binding CopyPidCommand}"
-                    Style="{StaticResource NormalButtonStyle}"
-                    Margin="8,0,0,0" />
-            <Button Content="复制命令行"
-                    Command="{Binding CopyCmdLineCommand}"
-                    Style="{StaticResource NormalButtonStyle}"
-                    Margin="8,0,0,0" />
-        </StackPanel>
+                                <CheckBox Content="自动刷新" IsChecked="{Binding IsAutoRefresh}"
+                                          VerticalAlignment="Center" Margin="16,0,0,0"
+                                          ToolTip="每 2 秒自动重新查询（不会清掉当前选中行）" />
+                                <CheckBox Content="显示命令行" IsChecked="{Binding ShowCmdLine}"
+                                          VerticalAlignment="Center" Margin="12,0,0,0" />
+                            </StackPanel>
 
-        <!-- ═══ Status Bar ═══ -->
-        <StatusBar Grid.Row="6" Background="#E8E8E8" Padding="6,3">
-            <StatusBarItem>
-                <TextBlock Text="{Binding StatusText}" />
-            </StatusBarItem>
-        </StatusBar>
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <TextBlock Text="常用端口" Style="{StaticResource HintTextStyle}"
+                                           VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <ItemsControl ItemsSource="{Binding QuickPorts}" VerticalAlignment="Center">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Content="{Binding}" Style="{StaticResource ChipButtonStyle}"
+                                                    Margin="0,0,6,0"
+                                                    Command="{Binding DataContext.QuickQueryCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 结果列表 -->
+                    <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="0" Margin="0,10,0,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <Grid Grid.Row="0" Margin="12,9,12,6">
+                                <TextBlock Text="查询结果" Style="{StaticResource SectionTitleStyle}" />
+                                <TextBlock Text="{Binding CountText}" HorizontalAlignment="Right"
+                                           Style="{StaticResource HintTextStyle}" VerticalAlignment="Center" />
+                            </Grid>
+
+                            <DataGrid Grid.Row="1"
+                                      ItemsSource="{Binding Connections}"
+                                      SelectedItem="{Binding SelectedConnection, Mode=TwoWay}"
+                                      AutoGenerateColumns="False" IsReadOnly="True"
+                                      SelectionMode="Single" SelectionUnit="FullRow"
+                                      CanUserAddRows="False" CanUserResizeRows="False"
+                                      HeadersVisibility="Column" RowHeaderWidth="0"
+                                      GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EEF0F2"
+                                      RowHeight="26" Background="Transparent" BorderThickness="0"
+                                      AlternatingRowBackground="#FAFBFC"
+                                      EnableRowVirtualization="True" VirtualizingPanel.ScrollUnit="Pixel"
+                                      FontSize="12.5">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="62" />
+                                    <DataGridTextColumn Header="进程" Binding="{Binding ProcessName}" Width="148" />
+                                    <DataGridTextColumn Header="协议" Binding="{Binding ProtocolName}" Width="54" />
+                                    <DataGridTextColumn Header="状态" Binding="{Binding State}" Width="112">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="FontWeight" Value="SemiBold" />
+                                                <Setter Property="Foreground"
+                                                        Value="{Binding StateColor, Converter={StaticResource StringToBrushConverter}}" />
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="本地地址" Binding="{Binding LocalAddress}" Width="*" />
+                                    <DataGridTextColumn Header="远端地址" Binding="{Binding RemoteAddress}" Width="164" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+
+                    <!-- 命令行详情 -->
+                    <Border Grid.Row="2" Style="{StaticResource CardStyle}" Margin="0,10,0,0">
+                        <StackPanel>
+                            <TextBlock Text="命令行 / 进程信息" Style="{StaticResource SectionTitleStyle}" />
+                            <TextBox Text="{Binding DetailText, Mode=OneWay}" IsReadOnly="True"
+                                     TextWrapping="Wrap" AcceptsReturn="True"
+                                     Background="Transparent" BorderThickness="0"
+                                     MinHeight="34" MaxHeight="52" Margin="0,4,0,0"
+                                     VerticalScrollBarVisibility="Auto"
+                                     Foreground="{StaticResource BodyTextBrush}"
+                                     FontFamily="Consolas, Microsoft YaHei UI" FontSize="12" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 操作按钮 -->
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,10,0,0">
+                        <Button Content="结束进程" Style="{StaticResource DangerButtonStyle}"
+                                Command="{Binding KillCommand}" />
+                        <Button Content="复制 PID" Style="{StaticResource NormalButtonStyle}"
+                                Command="{Binding CopyPidCommand}" Margin="8,0,0,0" />
+                        <Button Content="复制命令行" Style="{StaticResource NormalButtonStyle}"
+                                Command="{Binding CopyCmdLineCommand}" Margin="8,0,0,0" />
+                        <Button Content="复制全部" Style="{StaticResource NormalButtonStyle}"
+                                Command="{Binding CopyAllCommand}" Margin="8,0,0,0" />
+                        <Button Content="打开进程位置" Style="{StaticResource NormalButtonStyle}"
+                                Command="{Binding OpenLocationCommand}" Margin="8,0,0,0" />
+                    </StackPanel>
+
+                    <!-- 状态 -->
+                    <TextBlock Grid.Row="4" Text="{Binding StatusText}" Style="{StaticResource HintTextStyle}"
+                               Margin="2,8,0,0" TextTrimming="CharacterEllipsis" />
+                </Grid>
+            </TabItem>
+
+            <!-- ─────────────── 文件占用 ─────────────── -->
+            <TabItem Header="文件占用（句柄）" DataContext="{Binding FileLock}" Padding="14,6">
+                <Grid Margin="0,8,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- 路径与扫描 -->
+                    <Border Grid.Row="0" Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="文件路径" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBox Width="468" Height="30" VerticalContentAlignment="Center"
+                                         VerticalScrollBarVisibility="Hidden"
+                                         Text="{Binding FilePath, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="支持文件或文件夹；删除提示被占用时把该文件路径粘进来">
+                                    <TextBox.InputBindings>
+                                        <KeyBinding Key="Enter" Command="{Binding QuickScanCommand}" />
+                                    </TextBox.InputBindings>
+                                </TextBox>
+                                <Button Content="浏览..." Style="{StaticResource NormalButtonStyle}"
+                                        Command="{Binding BrowseCommand}" Margin="8,0,0,0" MinWidth="72" />
+                                <Button Content="快速检测" Style="{StaticResource PrimaryButtonStyle}"
+                                        Command="{Binding QuickScanCommand}" Margin="10,0,0,0" />
+                                <Button Content="深度扫描" Style="{StaticResource NormalButtonStyle}"
+                                        Command="{Binding DeepScanCommand}" Margin="8,0,0,0" />
+                            </StackPanel>
+                            <TextBlock Margin="0,9,0,0" Style="{StaticResource HintTextStyle}"
+                                       Text="快速检测：调用重启管理器接口，秒级出结果、无需管理员｜深度扫描：枚举系统全部句柄，需管理员，能列出具体句柄值" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 结果列表 -->
+                    <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="0" Margin="0,10,0,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <Grid Grid.Row="0" Margin="12,9,12,6">
+                                <TextBlock Text="占用进程" Style="{StaticResource SectionTitleStyle}" />
+                                <TextBlock Text="{Binding CountText}" HorizontalAlignment="Right"
+                                           Style="{StaticResource HintTextStyle}" VerticalAlignment="Center" />
+                            </Grid>
+
+                            <DataGrid Grid.Row="1"
+                                      ItemsSource="{Binding Results}"
+                                      SelectedItem="{Binding SelectedResult, Mode=TwoWay}"
+                                      AutoGenerateColumns="False" IsReadOnly="True"
+                                      SelectionMode="Single" SelectionUnit="FullRow"
+                                      CanUserAddRows="False" CanUserResizeRows="False"
+                                      HeadersVisibility="Column" RowHeaderWidth="0"
+                                      GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EEF0F2"
+                                      RowHeight="26" Background="Transparent" BorderThickness="0"
+                                      AlternatingRowBackground="#FAFBFC"
+                                      EnableRowVirtualization="True" VirtualizingPanel.ScrollUnit="Pixel"
+                                      FontSize="12.5">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="62" />
+                                    <DataGridTextColumn Header="进程" Binding="{Binding ProcessName}" Width="170" />
+                                    <DataGridTextColumn Header="来源" Binding="{Binding Source}" Width="104" />
+                                    <DataGridTextColumn Header="句柄" Binding="{Binding HandleText}" Width="90" />
+                                    <DataGridTextColumn Header="说明" Binding="{Binding Description}" Width="*" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+
+                    <!-- 详情 -->
+                    <Border Grid.Row="2" Style="{StaticResource CardStyle}" Margin="0,10,0,0">
+                        <StackPanel>
+                            <TextBlock Text="详情" Style="{StaticResource SectionTitleStyle}" />
+                            <TextBox Text="{Binding DetailText, Mode=OneWay}" IsReadOnly="True"
+                                     TextWrapping="Wrap" AcceptsReturn="True"
+                                     Background="Transparent" BorderThickness="0"
+                                     MinHeight="46" MaxHeight="62" Margin="0,4,0,0"
+                                     VerticalScrollBarVisibility="Auto"
+                                     Foreground="{StaticResource BodyTextBrush}"
+                                     FontFamily="Consolas, Microsoft YaHei UI" FontSize="12" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 操作按钮 -->
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,10,0,0">
+                        <Button Content="结束进程" Style="{StaticResource DangerButtonStyle}"
+                                Command="{Binding KillCommand}"
+                                ToolTip="最稳妥的方式：让占用文件的那个程序退出" />
+                        <Button Content="强制关闭句柄" Style="{StaticResource NormalButtonStyle}"
+                                Command="{Binding CloseHandleCommand}" Margin="8,0,0,0"
+                                ToolTip="高风险：直接抽掉别人手里的句柄，可能导致目标程序崩溃" />
+                        <Button Content="打开文件位置" Style="{StaticResource NormalButtonStyle}"
+                                Command="{Binding OpenLocationCommand}" Margin="8,0,0,0" />
+                        <Button Content="复制结果" Style="{StaticResource NormalButtonStyle}"
+                                Command="{Binding CopyCommand}" Margin="8,0,0,0" />
+                        <Button Content="清空" Style="{StaticResource NormalButtonStyle}"
+                                Command="{Binding ClearCommand}" Margin="8,0,0,0" />
+                    </StackPanel>
+
+                    <!-- 状态 -->
+                    <TextBlock Grid.Row="4" Text="{Binding StatusText}" Style="{StaticResource HintTextStyle}"
+                               Margin="2,8,0,0" TextTrimming="CharacterEllipsis" />
+                </Grid>
+            </TabItem>
+        </TabControl>
     </Grid>
 </Window>

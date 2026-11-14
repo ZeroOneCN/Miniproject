@@ -3,42 +3,81 @@ using System.Windows.Input;
 
 namespace PortMonitor.ViewModels;
 
-public class RelayCommand : ICommand
+/// <summary>
+/// 同步命令。可执行状态由调用方显式刷新（RaiseCanExecuteChanged）。
+/// </summary>
+public sealed class RelayCommand : ICommand
 {
-    private readonly Action _execute;
-    private readonly Func<bool>? _canExecute;
-
-    public event EventHandler? CanExecuteChanged;
+    private readonly Action<object?> _execute;
+    private readonly Func<object?, bool>? _canExecute;
 
     public RelayCommand(Action execute, Func<bool>? canExecute = null)
+        : this(_ => execute(), canExecute is null ? null : _ => canExecute())
     {
-        _execute = execute;
+    }
+
+    public RelayCommand(Action<object?> execute, Func<object?, bool>? canExecute = null)
+    {
+        _execute = execute ?? throw new ArgumentNullException(nameof(execute));
         _canExecute = canExecute;
     }
 
-    public bool CanExecute(object? parameter) => _canExecute?.Invoke() ?? true;
+    public event EventHandler? CanExecuteChanged;
 
-    public void Execute(object? parameter) => _execute();
+    public bool CanExecute(object? parameter) => _canExecute?.Invoke(parameter) ?? true;
+
+    public void Execute(object? parameter) => _execute(parameter);
 
     public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 }
 
-public class RelayCommand<T> : ICommand
+/// <summary>
+/// 异步命令：执行期间自动禁用自身，避免重复点击与并发重入。
+/// </summary>
+public sealed class AsyncRelayCommand : ICommand
 {
-    private readonly Action<T?> _execute;
-    private readonly Predicate<T?>? _canExecute;
+    private readonly Func<object?, Task> _execute;
+    private readonly Func<object?, bool>? _canExecute;
+    private bool _isRunning;
 
-    public event EventHandler? CanExecuteChanged;
-
-    public RelayCommand(Action<T?> execute, Predicate<T?>? canExecute = null)
+    public AsyncRelayCommand(Func<Task> execute, Func<bool>? canExecute = null)
+        : this(_ => execute(), canExecute is null ? null : _ => canExecute())
     {
-        _execute = execute;
+    }
+
+    public AsyncRelayCommand(Func<object?, Task> execute, Func<object?, bool>? canExecute = null)
+    {
+        _execute = execute ?? throw new ArgumentNullException(nameof(execute));
         _canExecute = canExecute;
     }
 
-    public bool CanExecute(object? parameter) => _canExecute?.Invoke((T?)parameter) ?? true;
+    public event EventHandler? CanExecuteChanged;
 
-    public void Execute(object? parameter) => _execute((T?)parameter);
+    public bool IsRunning => _isRunning;
+
+    public bool CanExecute(object? parameter) => !_isRunning && (_canExecute?.Invoke(parameter) ?? true);
+
+    public async void Execute(object? parameter)
+    {
+        if (_isRunning) return;
+
+        _isRunning = true;
+        RaiseCanExecuteChanged();
+
+        try
+        {
+            await _execute(parameter);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[command] {ex}");
+        }
+        finally
+        {
+            _isRunning = false;
+            RaiseCanExecuteChanged();
+        }
+    }
 
     public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 }

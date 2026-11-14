@@ -27,3 +27,9 @@ Thumbs.db
 **/recordings/
 *.err
 .trae/
+
+# WorkBuddy 工作区数据
+**/.workbuddy/
+
+# WPF 生成的临时工程
+*_wpftmp.csproj
