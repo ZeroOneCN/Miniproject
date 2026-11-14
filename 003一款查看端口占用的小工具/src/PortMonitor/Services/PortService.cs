@@ -9,6 +9,7 @@ namespace PortMonitor.Services;
 
 /// <summary>
 /// 端口连接枚举：IPv4 + IPv6、TCP + UDP 全覆盖。
+/// 数据直接取自系统连接表，不做网络探测，因此毫秒级返回。
 /// </summary>
 public static class PortService
 {
@@ -22,8 +23,17 @@ public static class PortService
     /// 查询指定端口的所有连接（IPv4 + IPv6，按协议筛选）。
     /// </summary>
     public static List<ConnectionInfo> Query(int port, ProtocolFilter filter)
+        => Collect(port, filter);
+
+    /// <summary>
+    /// 全端口总览：一次取回系统全部连接表记录（不做端口过滤）。
+    /// </summary>
+    public static List<ConnectionInfo> QueryAll(ProtocolFilter filter)
+        => Collect(null, filter);
+
+    private static List<ConnectionInfo> Collect(int? port, ProtocolFilter filter)
     {
-        var found = new List<ConnectionInfo>(16);
+        var found = new List<ConnectionInfo>(port.HasValue ? 16 : 1024);
 
         bool wantTcp = filter is ProtocolFilter.All or ProtocolFilter.TcpOnly;
         bool wantUdp = filter is ProtocolFilter.All or ProtocolFilter.UdpOnly;
@@ -41,29 +51,36 @@ public static class PortService
         }
 
         // 同一连接可能在 IPv4/IPv6 表中重复出现，按稳定键去重
-        var unique = found
-            .GroupBy(c => c.Key)
-            .Select(g => g.First())
-            .OrderBy(c => c.ProtocolName == "UDP" ? 1 : 0)
-            .ThenBy(c => c.State == "LISTEN" ? 0 : 1)
-            .ThenBy(c => c.LocalAddress, StringComparer.Ordinal)
-            .ToList();
+        var unique = found.GroupBy(c => c.Key).Select(g => g.First());
+
+        var ordered = port.HasValue
+            ? unique
+                .OrderBy(c => c.ProtocolName == "UDP" ? 1 : 0)
+                .ThenBy(c => c.State == "LISTEN" ? 0 : 1)
+                .ThenBy(c => c.LocalAddress, StringComparer.Ordinal)
+                .ToList()
+            : unique
+                .OrderBy(c => c.LocalPort)
+                .ThenBy(c => c.ProtocolName, StringComparer.Ordinal)
+                .ThenBy(c => c.State == "LISTEN" ? 0 : 1)
+                .ThenBy(c => c.LocalAddress, StringComparer.Ordinal)
+                .ToList();
 
         // 进程名一次性批量解析（比逐条 WMI 快两个数量级）
         var names = ProcessInfoService.GetProcessNames();
-        foreach (var item in unique)
+        foreach (var item in ordered)
         {
             item.ProcessName = item.Pid == 0
                 ? "System Idle"
                 : names.TryGetValue(item.Pid, out var name) ? name : "无法访问";
         }
 
-        return unique;
+        return ordered;
     }
 
     // ── TCP ────────────────────────────────────────────────────────────
 
-    private static void ReadTcp(int port, int family, List<ConnectionInfo> output)
+    private static void ReadTcp(int? port, int family, List<ConnectionInfo> output)
     {
         int size = 0;
         uint rc = NativeMethods.GetExtendedTcpTable(
@@ -90,7 +107,7 @@ public static class PortService
                     var row = Marshal.PtrToStructure<NativeMethods.MibTcpRowOwnerPid>(rowPtr);
                     int localPort = NetPortToHost(row.LocalPort);
                     int remotePort = NetPortToHost(row.RemotePort);
-                    if (localPort != port && remotePort != port) continue;
+                    if (port is int wanted && localPort != wanted && remotePort != wanted) continue;
 
                     output.Add(new ConnectionInfo
                     {
@@ -113,7 +130,7 @@ public static class PortService
                     var row = Marshal.PtrToStructure<NativeMethods.MibTcp6RowOwnerPid>(rowPtr);
                     int localPort = NetPortToHost(row.LocalPort);
                     int remotePort = NetPortToHost(row.RemotePort);
-                    if (localPort != port && remotePort != port) continue;
+                    if (port is int wanted && localPort != wanted && remotePort != wanted) continue;
 
                     bool remoteEmpty = row.RemotePort == 0;
                     output.Add(new ConnectionInfo
@@ -138,7 +155,7 @@ public static class PortService
 
     // ── UDP ────────────────────────────────────────────────────────────
 
-    private static void ReadUdp(int port, int family, List<ConnectionInfo> output)
+    private static void ReadUdp(int? port, int family, List<ConnectionInfo> output)
     {
         int size = 0;
         uint rc = NativeMethods.GetExtendedUdpTable(
@@ -164,7 +181,7 @@ public static class PortService
                 {
                     var row = Marshal.PtrToStructure<NativeMethods.MibUdpRowOwnerPid>(rowPtr);
                     int localPort = NetPortToHost(row.LocalPort);
-                    if (localPort != port) continue;
+                    if (port is int wanted && localPort != wanted) continue;
 
                     output.Add(new ConnectionInfo
                     {
@@ -184,7 +201,7 @@ public static class PortService
                 {
                     var row = Marshal.PtrToStructure<NativeMethods.MibUdp6RowOwnerPid>(rowPtr);
                     int localPort = NetPortToHost(row.LocalPort);
-                    if (localPort != port) continue;
+                    if (port is int wanted && localPort != wanted) continue;
 
                     output.Add(new ConnectionInfo
                     {
