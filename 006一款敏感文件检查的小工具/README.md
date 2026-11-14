@@ -1,4 +1,4 @@
-# GitHub 仓库敏感文件检查工具 v3.0
+# GitHub 仓库敏感文件检查工具 v3.0.1
 
 > 一款用来找出「不该提交却提交了」的文件的小工具：数据库文件、`.env`、私钥、备份包。
 > 支持本地目录、远程仓库、整用户批量扫描，结果按风险分级并直接给出可执行的清理命令。
@@ -6,7 +6,7 @@
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![PyQt6](https://img.shields.io/badge/UI-PyQt6-41CD52?style=flat-square&logo=qt&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white)
-![Version](https://img.shields.io/badge/Version-3.0.0-3E6BFA?style=flat-square)
+![Version](https://img.shields.io/badge/Version-3.0.1-3E6BFA?style=flat-square)
 
 ---
 
@@ -20,13 +20,30 @@
 
 ![批量任务](./images/批量任务.png)
 
+**使用说明** — 检测规则、风险判定与处理流程，文字可直接选中复制
+
+![使用说明](./images/使用说明.png)
+
 **修复指引** — 按本次结果自动填好路径的命令清单，复制即用
 
 ![修复指引](./images/修复指引.png)
 
 ---
 
-## 一、v3.0 更新内容
+## 一、版本变更
+
+### v3.0.1 · 细节修正
+
+| 问题 | 处理 |
+| --- | --- |
+| 使用说明页卡片之间与卡片下方露出一条灰色 | 滚动容器背景强制透明，卡片间隙回到页面底色 `#F2F5FB` |
+| 窗口默认 1320×880，在 1080p + 125% 缩放下可用高度只有 824，底部与左下角信息被顶到屏幕外 | 启动时按屏幕可用区域计算尺寸并居中（该环境得到 1280×728），最小尺寸放宽到 960×620 |
+| 窗口拉小后卡片被压扁、提示文字被裁成一条 | 页面内容整体可滚动，不再挤压控件；字号最小的几处从 11px 提到 12px，中文底部不再缺一截 |
+| 使用说明的文字无法选中、无法复制 | 全部说明文本改为可选中，支持鼠标拖选、Ctrl+C，以及中文右键菜单「复制 / 全选」 |
+| 输入框右键弹出的是英文 Undo / Copy | 自定义中文右键菜单：撤销 / 重做 / 剪切 / 复制 / 粘贴 / 删除 / 全选，按当前状态置灰；同时加载 Qt 中文翻译，消息框与文件对话框的标准按钮也是中文 |
+| 结果卡片标题栏塞了搜索、筛选、导出五个控件，窄窗口下互相挤压 | 搜索与筛选独立成一行工具栏，标题栏只留「导出报告 / 清空」 |
+
+### v3.0 · 架构与界面重做
 
 | 维度 | v2.x（Tkinter 单文件） | v3.0（PyQt6 分层） |
 | --- | --- | --- |
@@ -137,6 +154,16 @@ python -m PyInstaller --noconfirm --clean --noconsole --onefile ^
 
 > 重写历史会改变所有提交哈希，操作前请备份仓库；已有 Fork 需要单独处理。
 
+### 6. 界面细节
+
+| 场景 | 行为 |
+| --- | --- |
+| 启动 | 按屏幕可用区域计算窗口大小并居中，1080p 125% 缩放下也不会溢出屏幕底部 |
+| 窗口拉小 | 页面整体滚动，卡片与文字不被压缩；960×620 以下靠滚动查看 |
+| 使用说明 | 说明文字可拖选、可 Ctrl+C，右键为中文「复制 / 全选」 |
+| 输入框右键 | 撤销 / 重做 / 剪切 / 复制 / 粘贴 / 删除 / 全选，按当前状态置灰，不再是英文 Undo / Copy |
+| 消息框与文件对话框 | 加载 Qt 中文翻译，按钮显示「确定 / 取消 / 是 / 否」 |
+
 ---
 
 ## 五、检测规则与风险判定
@@ -180,7 +207,7 @@ python -m PyInstaller --noconfirm --clean --noconsole --onefile ^
 │   │   └── report.py                # TXT / JSON / CSV 与修复指引
 │   └── ui/                          # PyQt6 界面层
 │       ├── theme.py                 # 调色板 + 全局 QSS + 图标加载
-│       ├── widgets.py               # 卡片、统计卡、分段控件、徽章、Toast
+│       ├── widgets.py               # 卡片、统计卡、分段控件、徽章、Toast、可复制标签、中文右键输入框
 │       ├── results_panel.py         # 统计 + 筛选 + 表格 + 导出
 │       ├── pages.py                 # 扫描检查 / 批量任务 / 使用说明
 │       ├── dialogs.py               # 修复指引对话框

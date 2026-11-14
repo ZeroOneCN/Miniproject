@@ -14,7 +14,7 @@ from pathlib import Path
 
 APP_NAME = "敏感文件泄露检查"
 APP_TITLE = "GitHub 仓库敏感文件检查工具"
-VERSION = "3.0.0"
+VERSION = "3.0.1"
 AUTHOR = "ZeroOneCN"
 REPO_URL = "https://github.com/ZeroOneCN/Miniproject"
 

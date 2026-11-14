@@ -19,10 +19,10 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QLineEdit,
     QMenu,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -34,7 +34,7 @@ from ..core import report as report_mod
 from ..core.models import ScanItem, ScanResult
 from ..core.rules import KIND_NAMES
 from . import theme
-from .widgets import Card, KindDotDelegate, RiskBadgeDelegate, StatCard, show_toast
+from .widgets import Card, KindDotDelegate, LineEdit, RiskBadgeDelegate, StatCard, show_toast
 
 RISK_FILTERS: list[tuple[str, str, int]] = [
     ("全部风险", "all", -1),
@@ -89,6 +89,7 @@ class ResultsPanel(QWidget):
 
         self._card = Card("扫描结果", "按风险等级从高到低排列")
         self._build_header_actions()
+        self._card.add_widget(self._build_toolbar())
         self._build_table()
         self._build_footer()
         layout.addWidget(self._card, 1)
@@ -112,11 +113,26 @@ class ResultsPanel(QWidget):
         return row
 
     def _build_header_actions(self) -> None:
-        self._search = QLineEdit()
+        self._export_btn = QPushButton("导出报告")
+        self._export_btn.setProperty("variant", "ghost")
+        self._export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._export_btn.setMenu(self._build_export_menu())
+
+        self._clear_btn = QPushButton("清空")
+        self._clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._clear_btn.clicked.connect(self.clear)
+
+        self._card.add_action(self._export_btn)
+        self._card.add_action(self._clear_btn)
+
+    def _build_toolbar(self) -> QWidget:
+        """搜索与筛选单独一行，标题栏留给导出按钮，窄窗口也不会挤爆。"""
+        self._search = LineEdit()
         self._search.setObjectName("SearchBox")
         self._search.setPlaceholderText("搜索路径 / 来源 …")
         self._search.setClearButtonEnabled(True)
-        self._search.setFixedWidth(200)
+        self._search.setMinimumWidth(150)
+        self._search.setMaximumWidth(260)
         self._search.textChanged.connect(lambda _text: self._render())
 
         self._risk_filter = QComboBox()
@@ -127,23 +143,15 @@ class ResultsPanel(QWidget):
         self._only_committed = QCheckBox("仅已提交")
         self._only_committed.stateChanged.connect(lambda _state: self._render())
 
-        self._export_btn = QPushButton("导出报告")
-        self._export_btn.setProperty("variant", "ghost")
-        self._export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._export_btn.setMenu(self._build_export_menu())
-
-        self._clear_btn = QPushButton("清空")
-        self._clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._clear_btn.clicked.connect(self.clear)
-
-        for widget in (
-            self._search,
-            self._risk_filter,
-            self._only_committed,
-            self._export_btn,
-            self._clear_btn,
-        ):
-            self._card.add_action(widget)
+        bar = QWidget()
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(0, 0, 0, 2)
+        row.setSpacing(10)
+        row.addWidget(self._search)
+        row.addWidget(self._risk_filter)
+        row.addWidget(self._only_committed)
+        row.addStretch(1)
+        return bar
 
     def _build_export_menu(self) -> QMenu:
         menu = QMenu(self)
@@ -194,6 +202,10 @@ class ResultsPanel(QWidget):
         self._table.customContextMenuRequested.connect(self._show_context_menu)
 
         self._empty = EmptyState()
+        # sizeHint 由外部高度决定，否则滚动区会按表格默认高度估算出多余滚动条
+        self._stack.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Ignored
+        )
         self._stack.addWidget(self._table)
         self._stack.addWidget(self._empty)
         self._stack.setCurrentWidget(self._empty)

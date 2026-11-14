@@ -4,8 +4,9 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (
+    QApplication,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -13,7 +14,6 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QStackedWidget,
     QVBoxLayout,
-    QWidget,
 )
 
 from .. import APP_NAME, APP_TITLE, VERSION
@@ -64,8 +64,8 @@ class MainWindow(QMainWindow):
         super().__init__(parent)
         self.setWindowTitle(f"{APP_TITLE} v{VERSION}")
         self.setWindowIcon(theme.app_icon())
-        self.resize(1320, 880)
-        self.setMinimumSize(1120, 740)
+        self.setMinimumSize(960, 620)
+        self._fit_to_screen()
 
         self._worker: ScanWorker | None = None
         self._nav_buttons: list[NavButton] = []
@@ -77,6 +77,22 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
     # 界面
     # ------------------------------------------------------------------ #
+
+    def _fit_to_screen(self) -> None:
+        """按屏幕可用区域决定初始尺寸，避免窗口高于屏幕把底部挤出视野。"""
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            self.resize(1180, 780)
+            return
+
+        available = screen.availableGeometry()
+        width = min(1280, max(960, available.width() - 96))
+        height = min(860, max(620, available.height() - 96))
+        self.resize(width, height)
+
+        frame = self.frameGeometry()
+        frame.moveCenter(available.center())
+        self.move(frame.topLeft())
 
     def _build_ui(self) -> None:
         root = QFrame()

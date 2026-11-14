@@ -48,7 +48,37 @@ from ..core.rules import (
 )
 from . import theme
 from .results_panel import ResultsPanel
-from .widgets import Card, SegmentedControl, divider, field_label, hint_label, show_toast
+from .widgets import (
+    Card,
+    LineEdit,
+    SegmentedControl,
+    SelectableLabel,
+    divider,
+    field_label,
+    hint_label,
+    show_toast,
+)
+
+
+def page_scroll(content: QWidget, min_height: int = 0) -> QScrollArea:
+    """把页面内容装进透明底的滚动区。
+
+    窗口很矮时内容会整体滚动，而不是把卡片压扁、把文字裁掉；
+    窗口够高时滚动条不出现，内容仍然铺满可视区域。
+    """
+    if min_height:
+        content.setMinimumHeight(min_height)
+    content.setObjectName("ScrollBody")
+    content.setAutoFillBackground(False)
+    content.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    scroll.setFrameShape(QFrame.Shape.NoFrame)
+    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    scroll.viewport().setAutoFillBackground(False)
+    scroll.setWidget(content)
+    return scroll
 
 
 class PageHeader(QWidget):
@@ -81,9 +111,11 @@ class ScanPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.results = ResultsPanel()
+        self.results.setMinimumHeight(320)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        body = QWidget()
+        layout = QVBoxLayout(body)
+        layout.setContentsMargins(0, 0, 6, 0)
         layout.setSpacing(14)
 
         layout.addWidget(
@@ -91,6 +123,10 @@ class ScanPage(QWidget):
         )
         layout.addWidget(self._build_target_card())
         layout.addWidget(self.results, 1)
+
+        shell = QVBoxLayout(self)
+        shell.setContentsMargins(0, 0, 0, 0)
+        shell.addWidget(page_scroll(body, min_height=520))
 
         self.results.solutions_requested.connect(self.solutions_requested.emit)
         QShortcut(QKeySequence("Ctrl+Return"), self, activated=self._emit_scan)
@@ -111,11 +147,13 @@ class ScanPage(QWidget):
 
         self.target_label = field_label("目录路径")
         self.target_label.setFixedWidth(92)
-        self.target_input = QLineEdit()
+        self.target_input = LineEdit()
         self.target_input.setPlaceholderText("选择或输入要扫描的目录")
         self.target_input.setMinimumHeight(36)
+        self.target_input.setMinimumWidth(180)
 
         self.browse_btn = QPushButton("浏览…")
+        self.browse_btn.setMinimumWidth(76)
         self.browse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.browse_btn.clicked.connect(self._browse)
 
@@ -137,12 +175,12 @@ class ScanPage(QWidget):
 
         self.token_label = field_label("GitHub Token")
         self.token_label.setFixedWidth(92)
-        self.token_input = QLineEdit()
+        self.token_input = LineEdit()
         self.token_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.token_input.setPlaceholderText("可选，留空则使用匿名额度（60 次/小时）")
         self.token_input.setMinimumHeight(36)
         self.reveal_btn = QPushButton("显示")
-        self.reveal_btn.setFixedWidth(60)
+        self.reveal_btn.setFixedWidth(62)
         self.reveal_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.reveal_btn.clicked.connect(self._toggle_token_visibility)
 
@@ -287,8 +325,9 @@ class BatchPage(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 6, 0)
         layout.setSpacing(14)
 
         layout.addWidget(
@@ -301,6 +340,10 @@ class BatchPage(QWidget):
         body.addWidget(self._build_queue_card(), 3)
         body.addWidget(self._build_add_card(), 2)
         layout.addLayout(body, 1)
+
+        shell = QVBoxLayout(self)
+        shell.setContentsMargins(0, 0, 0, 0)
+        shell.addWidget(page_scroll(content, min_height=520))
 
     # ------------------------------------------------------------------ #
 
@@ -350,7 +393,7 @@ class BatchPage(QWidget):
         type_row.addStretch(1)
         card.add_layout(type_row)
 
-        self.target_input = QLineEdit()
+        self.target_input = LineEdit()
         self.target_input.setPlaceholderText("owner/repo 或 GitHub 链接")
         self.target_input.setMinimumHeight(36)
         self.target_input.returnPressed.connect(self._add_task)
@@ -382,7 +425,7 @@ class BatchPage(QWidget):
         card.add_widget(divider())
 
         card.add_widget(field_label("GitHub Token（可选）"))
-        self.token_input = QLineEdit()
+        self.token_input = LineEdit()
         self.token_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.token_input.setPlaceholderText("批量扫描远程仓库时建议填写")
         self.token_input.setMinimumHeight(36)
@@ -541,12 +584,9 @@ class GuidePage(QWidget):
 
         outer.addWidget(PageHeader("使用说明", "检测规则、风险判定与泄露后的处理流程"))
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         container = QWidget()
         content = QVBoxLayout(container)
-        content.setContentsMargins(0, 0, 8, 0)
+        content.setContentsMargins(0, 0, 6, 0)
         content.setSpacing(14)
 
         content.addWidget(self._build_rules_card())
@@ -555,8 +595,7 @@ class GuidePage(QWidget):
         content.addWidget(self._build_about_card())
         content.addStretch(1)
 
-        scroll.setWidget(container)
-        outer.addWidget(scroll, 1)
+        outer.addWidget(page_scroll(container), 1)
 
     # ------------------------------------------------------------------ #
 
@@ -566,11 +605,10 @@ class GuidePage(QWidget):
         grid.setSpacing(6)
         for name, patterns in [(KIND_NAMES[k], KIND_DISPLAY[k]) for k in KIND_ORDER]:
             line = QHBoxLayout()
-            name_label = QLabel(name)
+            name_label = SelectableLabel(name, wrap=False)
             name_label.setFixedWidth(130)
             name_label.setStyleSheet(f"color: {theme.TEXT}; font-size: 12px;")
-            pattern_label = QLabel(patterns)
-            pattern_label.setWordWrap(True)
+            pattern_label = SelectableLabel(patterns)
             pattern_label.setStyleSheet(
                 f"color: {theme.TEXT_MUTED}; font-size: 12px;"
                 f"font-family: '{theme.FONT_FAMILY_MONO}', Consolas;"
@@ -591,14 +629,13 @@ class GuidePage(QWidget):
         ]
         for level, text in notes:
             pill_label = QLabel(RISK_NAMES[level])
-            pill_label.setFixedWidth(56)
+            pill_label.setFixedWidth(62)
             pill_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             pill_label.setStyleSheet(
                 f"color: {RISK_COLORS[level]}; background: {RISK_BACKGROUNDS[level]};"
-                f"border-radius: 7px; padding: 3px 0px; font-size: 11px; font-weight: 700;"
+                f"border-radius: 7px; padding: 4px 0px; font-size: 12px; font-weight: 700;"
             )
-            text_label = QLabel(text)
-            text_label.setWordWrap(True)
+            text_label = SelectableLabel(text)
             text_label.setStyleSheet(f"color: {theme.TEXT_MUTED}; font-size: 12px;")
             line = QHBoxLayout()
             line.setSpacing(10)
@@ -619,18 +656,17 @@ class GuidePage(QWidget):
             row = QHBoxLayout()
             row.setSpacing(10)
             badge = QLabel(index)
-            badge.setFixedSize(22, 22)
+            badge.setFixedSize(24, 24)
             badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
             badge.setStyleSheet(
                 f"background: {theme.PRIMARY_SOFT}; color: {theme.PRIMARY_DARK};"
-                "border-radius: 11px; font-size: 11px; font-weight: 700;"
+                "border-radius: 12px; font-size: 12px; font-weight: 700;"
             )
             text_box = QVBoxLayout()
             text_box.setSpacing(2)
-            title_label = QLabel(title)
+            title_label = SelectableLabel(title, wrap=False)
             title_label.setStyleSheet(f"color: {theme.TEXT}; font-size: 12px; font-weight: 600;")
-            detail_label = QLabel(detail)
-            detail_label.setWordWrap(True)
+            detail_label = SelectableLabel(detail)
             detail_label.setStyleSheet(f"color: {theme.TEXT_MUTED}; font-size: 12px;")
             text_box.addWidget(title_label)
             text_box.addWidget(detail_label)
@@ -641,16 +677,17 @@ class GuidePage(QWidget):
 
     def _build_about_card(self) -> Card:
         card = Card("关于")
-        info = QLabel(
+        info = SelectableLabel(
             f"{APP_TITLE}  v{VERSION}\n"
             f"作者：{AUTHOR}　·　仓库：{REPO_URL}\n"
             "技术栈：Python 3.10+ / PyQt6 / GitHub REST API"
         )
-        info.setWordWrap(True)
         info.setStyleSheet(f"color: {theme.TEXT_MUTED}; font-size: 12px; line-height: 160%;")
         card.add_widget(info)
-        tip = hint_label(
+
+        tip = SelectableLabel(
             "隐私说明：Token 仅保存在当前进程内存中，不写盘、不上传；扫描结果也只留在本机。"
         )
+        tip.setObjectName("Hint")
         card.add_widget(tip)
         return card

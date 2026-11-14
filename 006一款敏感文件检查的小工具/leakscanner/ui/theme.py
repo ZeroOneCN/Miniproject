@@ -122,6 +122,8 @@ QFrame#Toast {{
 QLabel {{
     background: transparent;
     color: {TEXT};
+    selection-background-color: #C9D8FF;
+    selection-color: {TEXT};
 }}
 
 QLabel#PageTitle {{
@@ -147,7 +149,7 @@ QLabel#FieldLabel {{
 }}
 
 QLabel#Hint {{
-    font-size: 11px;
+    font-size: 12px;
     color: {TEXT_FAINT};
 }}
 
@@ -158,7 +160,7 @@ QLabel#StatValue {{
 }}
 
 QLabel#StatTitle {{
-    font-size: 11px;
+    font-size: 12px;
     color: {TEXT_MUTED};
 }}
 
@@ -169,12 +171,12 @@ QLabel#BrandName {{
 }}
 
 QLabel#BrandMeta {{
-    font-size: 11px;
+    font-size: 12px;
     color: #92A3C4;
 }}
 
 QLabel#RailFooter {{
-    font-size: 10px;
+    font-size: 11px;
     color: #7C8DAF;
 }}
 
@@ -387,7 +389,7 @@ QHeaderView::section {{
     border-bottom: 1px solid {BORDER};
     padding: 9px 10px;
     color: {TEXT_MUTED};
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
 }}
 QTableCornerButton::section {{
@@ -412,6 +414,12 @@ QProgressBar::chunk {{
 QScrollArea {{
     background: transparent;
     border: none;
+}}
+
+/* 滚动区里的内容容器默认会继承 Fusion 的灰色窗口底色，
+   这里强制透明，否则卡片之间会露出一条条灰色带。 */
+QWidget#ScrollBody {{
+    background: transparent;
 }}
 QScrollBar:vertical {{
     background: transparent;
@@ -454,6 +462,7 @@ QMenu {{
     border: 1px solid {BORDER};
     border-radius: 10px;
     padding: 6px;
+    min-width: 104px;
 }}
 QMenu::item {{
     padding: 7px 22px 7px 14px;
@@ -464,6 +473,10 @@ QMenu::item {{
 QMenu::item:selected {{
     background: {PRIMARY_SOFT};
     color: {PRIMARY_DARK};
+}}
+QMenu::item:disabled {{
+    background: transparent;
+    color: #B4BECF;
 }}
 QMenu::separator {{
     height: 1px;
@@ -487,7 +500,7 @@ QToolTip {{
     color: #F2F6FF;
     border: none;
     padding: 6px 8px;
-    font-size: 11px;
+    font-size: 12px;
 }}
 """
 

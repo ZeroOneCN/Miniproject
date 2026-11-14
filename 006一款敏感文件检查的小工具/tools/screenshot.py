@@ -56,7 +56,7 @@ def main() -> None:
     theme.apply_theme(app)
 
     window = MainWindow()
-    window.resize(1320, 880)
+    window.resize(1280, 800)
     window.show()
     pump(app)
 
@@ -93,6 +93,11 @@ def main() -> None:
     pump(app)
     window.grab().save(str(OUT / "批量任务.png"))
 
+    # 使用说明页
+    window._switch(2)
+    pump(app)
+    window.grab().save(str(OUT / "使用说明.png"))
+
     # 修复指引
     dialog = SolutionsDialog(window._scan_page.results.result, window)
     dialog.resize(880, 660)
@@ -101,7 +106,7 @@ def main() -> None:
     dialog.grab().save(str(OUT / "修复指引.png"))
     dialog.close()
 
-    for name in ("程序首页.png", "批量任务.png", "修复指引.png"):
+    for name in ("程序首页.png", "批量任务.png", "使用说明.png", "修复指引.png"):
         path = OUT / name
         print(f"{path.relative_to(ROOT)}  {path.stat().st_size / 1024:.0f} KB")
 

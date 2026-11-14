@@ -4,14 +4,17 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, QSize, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen
+from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QPainter
 from PyQt6.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QFrame,
     QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
+    QMenu,
     QPushButton,
     QSizePolicy,
     QStyledItemDelegate,
@@ -117,7 +120,8 @@ class SegmentedControl(QFrame):
             button.setCheckable(True)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.setProperty("variant", "segment")
-            button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+            button.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
+            button.setMinimumWidth(78)
             self._group.addButton(button)
             layout.addWidget(button)
             self._buttons[key] = button
@@ -207,6 +211,115 @@ class KindDotDelegate(QStyledItemDelegate):
         painter.restore()
 
 
+def clipboard_has_text() -> bool:
+    """剪贴板里是否有可粘贴的文本（离屏环境可能没有 mimeData）。"""
+    clipboard = QApplication.clipboard()
+    if clipboard is None:
+        return False
+    mime = clipboard.mimeData()
+    return bool(mime is not None and mime.hasText())
+
+
+def copy_text(text: str) -> None:
+    """把文本写进系统剪贴板（统一处理跨行分隔符）。"""
+    if text:
+        QApplication.clipboard().setText(text.replace("\u2029", "\n"))
+
+
+class SelectableLabel(QLabel):
+    """可选中、可复制的说明文字。
+
+    QLabel 默认只是静态文本，这里打开文本选择能力，并补上中文右键菜单
+    （Qt 自带菜单依赖翻译文件，缺翻译时会显示成 Undo / Copy），
+    保证「复制」这类常规操作在说明页也能用。
+    """
+
+    def __init__(self, text: str = "", parent=None, wrap: bool = True):
+        super().__init__(text, parent)
+        self.setWordWrap(wrap)
+        self.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+            | Qt.TextInteractionFlag.TextSelectableByKeyboard
+        )
+        self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        self.setCursor(Qt.CursorShape.IBeamCursor)
+
+    def selected_plain_text(self) -> str:
+        return self.selectedText().replace("\u2029", "\n")
+
+    def build_context_menu(self) -> QMenu:
+        """中文右键菜单：复制 / 全选。"""
+        menu = QMenu(self)
+        self._copy_action = menu.addAction("复制")
+        self._copy_action.setShortcut("Ctrl+C")
+        self._copy_action.setEnabled(self.hasSelectedText())
+        self._select_action = menu.addAction("全选")
+        self._select_action.setShortcut("Ctrl+A")
+        self._select_action.setEnabled(bool(self.text()))
+        menu.triggered.connect(self._on_menu_triggered)
+        return menu
+
+    def _on_menu_triggered(self, action) -> None:
+        if action is self._copy_action:
+            copy_text(self.selected_plain_text())
+        elif action is self._select_action:
+            self.setSelection(0, len(self.text()))
+
+    def contextMenuEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        self.build_context_menu().exec(event.globalPos())
+
+
+class LineEdit(QLineEdit):
+    """输入框，右键菜单固定为中文。"""
+
+    def build_context_menu(self) -> QMenu:
+        """中文右键菜单（Qt 自带菜单依赖翻译文件，这里固定中文）。"""
+        editable = not self.isReadOnly()
+        has_selection = self.hasSelectedText()
+        can_paste = editable and clipboard_has_text()
+
+        menu = QMenu(self)
+        self._actions = {}
+        for key, text, enabled in (
+            ("undo", "撤销", editable and self.isUndoAvailable()),
+            ("redo", "重做", editable and self.isRedoAvailable()),
+            ("|", "", None),
+            ("cut", "剪切", editable and has_selection),
+            ("copy", "复制", has_selection),
+            ("paste", "粘贴", can_paste),
+            ("delete", "删除", editable and has_selection),
+            ("|", "", None),
+            ("select_all", "全选", bool(self.text())),
+        ):
+            if key == "|":
+                menu.addSeparator()
+                continue
+            action = menu.addAction(text)
+            action.setEnabled(enabled)
+            self._actions[key] = action
+
+        menu.triggered.connect(self._on_menu_triggered)
+        return menu
+
+    def _on_menu_triggered(self, action) -> None:
+        handler = {
+            "undo": self.undo,
+            "redo": self.redo,
+            "cut": self.cut,
+            "copy": self.copy,
+            "paste": self.paste,
+            "delete": self.del_,
+            "select_all": self.selectAll,
+        }
+        for key, candidate in self._actions.items():
+            if candidate is action:
+                handler[key]()
+                return
+
+    def contextMenuEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        self.build_context_menu().exec(event.globalPos())
+
+
 class Toast(QFrame):
     """左下角浮出的轻提示。"""
 
@@ -284,7 +397,7 @@ def pill(text: str, fg: str, bg: str, bold: bool = True) -> QLabel:
     weight = "700" if bold else "500"
     label.setStyleSheet(
         f"color: {fg}; background: {bg}; border-radius: 7px;"
-        f"padding: 3px 9px; font-size: 11px; font-weight: {weight};"
+        f"padding: 4px 10px; font-size: 12px; font-weight: {weight};"
     )
     label.setAlignment(Qt.AlignmentFlag.AlignCenter)
     label.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
