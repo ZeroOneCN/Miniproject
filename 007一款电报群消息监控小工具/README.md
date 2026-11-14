@@ -33,7 +33,7 @@
 ### 1. 安装依赖
 
 ```bash
-cd tgmonitor
+cd 007一款电报群消息监控小工具   # 进入本工具目录
 pip install -r requirements.txt
 ```
 
@@ -153,9 +153,12 @@ export TG_AUTO_START_MONITORS=0
 
 ### 测试
 
+回归测试仅保留在本地开发环境，**不随仓库分发**（`tests/` 与 `requirements-dev.txt` 已列入 `.gitignore`）。
+本地已有测试目录时：
+
 ```bash
-pip install -r requirements-dev.txt
-pytest -q
+pip install pytest httpx
+pytest tests -q
 ```
 
 ---
