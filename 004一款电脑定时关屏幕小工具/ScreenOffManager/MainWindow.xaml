@@ -1,0 +1,120 @@
+<Window x:Class="ScreenOffManager.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="熄屏管家"
+        Width="430"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        Icon="Resources/app_icon.ico"
+        Style="{StaticResource MainWindowStyle}">
+    <Grid Margin="0,0,0,12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 标题 -->
+        <StackPanel Grid.Row="0" Margin="0,10,0,2">
+            <TextBlock Style="{StaticResource TitleStyle}" Text="熄屏管家" Margin="0" />
+            <TextBlock Text="屏幕关闭时间管理" HorizontalAlignment="Center"
+                       Foreground="#AAAAAA" FontSize="11" Margin="0,1,0,0" />
+        </StackPanel>
+
+        <!-- 当前状态 -->
+        <GroupBox Grid.Row="1" Header="当前状态">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource StatusLabelStyle}" Text="电源方案" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource StatusValueStyle}"
+                           Text="{Binding SchemeName}" ToolTip="{Binding SchemeName}" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource StatusLabelStyle}" Text="关闭时间" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource StatusValueStyle}"
+                           Foreground="#0078D4" Text="{Binding TimeoutText}"
+                           ToolTip="{Binding TimeoutText}" />
+
+                <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Style="{StaticResource StatusLabelStyle}"
+                           Text="{Binding AdminText}" TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding AdminText}" />
+            </Grid>
+        </GroupBox>
+
+        <!-- 快捷设置 -->
+        <GroupBox Grid.Row="2" Header="快捷设置">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Button Grid.Row="0" Grid.Column="0" Content="永不关闭"
+                        Command="{Binding SetNeverCommand}" />
+                <Button Grid.Row="0" Grid.Column="1" Content="1 分钟"
+                        Command="{Binding SetOneMinuteCommand}" />
+                <Button Grid.Row="1" Grid.Column="0" Content="恢复默认 10 分钟"
+                        Command="{Binding SetDefaultCommand}" />
+                <Button Grid.Row="1" Grid.Column="1" Content="刷新状态"
+                        Command="{Binding RefreshCommand}"
+                        IsEnabled="{Binding IsNotRefreshing}" />
+            </Grid>
+        </GroupBox>
+
+        <!-- 自定义设置 -->
+        <GroupBox Grid.Row="3" Header="自定义设置">
+            <Grid HorizontalAlignment="Center">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="分钟数" VerticalAlignment="Center"
+                           Margin="2,0,6,0" Foreground="#777777" FontSize="12" />
+                <TextBox Grid.Column="1" Width="64"
+                         Text="{Binding CustomMinutesText, UpdateSourceTrigger=PropertyChanged}"
+                         HorizontalContentAlignment="Center"
+                         VerticalAlignment="Center" />
+                <Button Grid.Column="2" Content="应用设置" Margin="8,0,0,0"
+                        Style="{StaticResource AccentButtonStyle}"
+                        Command="{Binding ApplyCustomCommand}"
+                        IsEnabled="{Binding IsNotRefreshing}" />
+                <TextBlock Grid.Column="3" Text="0 = 永不关闭" VerticalAlignment="Center"
+                           Margin="8,0,0,0" Foreground="#BBBBBB" FontSize="11" />
+            </Grid>
+        </GroupBox>
+
+        <!-- 底部：开机自启 + 托盘提示 -->
+        <Grid Grid.Row="4" Margin="14,10,14,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <CheckBox Grid.Column="0" Content="开机自动启动"
+                      IsChecked="{Binding IsAutoStart}"
+                      VerticalAlignment="Center" />
+
+            <TextBlock Grid.Column="1" Text="关闭窗口不退出，程序留在托盘"
+                       HorizontalAlignment="Right" VerticalAlignment="Center"
+                       Foreground="#AAAAAA" FontSize="11" />
+        </Grid>
+    </Grid>
+</Window>

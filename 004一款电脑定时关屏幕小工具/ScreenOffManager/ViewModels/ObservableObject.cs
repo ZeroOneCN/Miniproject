@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace ScreenTimeoutManager.ViewModels;
+namespace ScreenOffManager.ViewModels;
 
 /// <summary>MVVM 基类，提供 INotifyPropertyChanged 实现</summary>
 public class ObservableObject : INotifyPropertyChanged

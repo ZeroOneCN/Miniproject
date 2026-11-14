@@ -1,8 +1,8 @@
 using System.Windows.Input;
 
-namespace ScreenTimeoutManager.ViewModels;
+namespace ScreenOffManager.ViewModels;
 
-/// <summary>ICommand 实现，支持异步/同步委托</summary>
+/// <summary>ICommand 实现，支持同步/异步委托</summary>
 public class RelayCommand : ICommand
 {
     private readonly Action<object?> _execute;
@@ -26,5 +26,6 @@ public class RelayCommand : ICommand
     }
 
     public bool CanExecute(object? parameter) => _canExecute?.Invoke(parameter) ?? true;
+
     public void Execute(object? parameter) => _execute(parameter);
 }
