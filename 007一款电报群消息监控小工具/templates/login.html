@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>登录 - Telegram 群聊频道消息监控后台</title>
+<link rel="icon" type="image/svg+xml" href="/logo.svg">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  background: linear-gradient(160deg, #eef2fb 0%, #f6f8fc 100%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.login-box {
+  position: relative;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 10px 40px rgba(30,60,120,.10), 0 2px 8px rgba(23,32,48,.05);
+  border: 1px solid #eef1f6;
+  padding: 40px 32px;
+  width: 100%;
+  max-width: 420px;
+  overflow: hidden;
+}
+.login-box::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:4px;
+  background: linear-gradient(90deg, #4A90D9, #5ba7e8);
+}
+.logo-area {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.logo-area img {
+  width: 52px;
+  height: 52px;
+  margin-bottom: 14px;
+  border-radius: 14px;
+  box-shadow: 0 4px 12px rgba(74,144,217,.22);
+}
+.logo-area h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #232930;
+}
+.logo-area p {
+  font-size: 13px;
+  color: #8a94a6;
+  margin-top: 6px;
+}
+.form-group {
+  margin-bottom: 18px;
+}
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #232930;
+  margin-bottom: 8px;
+}
+.form-group input {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid #dfe4ec;
+  border-radius: 8px;
+  font-size: 15px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+  background: #fff;
+}
+.form-group input:focus {
+  border-color: #4A90D9;
+  box-shadow: 0 0 0 3px rgba(74,144,217,.14);
+}
+.btn-login {
+  width: 100%;
+  padding: 12px;
+  background: #4A90D9;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s;
+  box-shadow: 0 6px 16px rgba(74,144,217,.28);
+}
+.btn-login:hover {
+  background: #3a7fc4;
+}
+.btn-login:active {
+  background: #2f6fae;
+}
+.btn-login:disabled {
+  background: #b0c8e8;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.error-msg {
+  color: #e5484d;
+  font-size: 13px;
+  margin-top: 14px;
+  text-align: center;
+  display: none;
+}
+.error-msg.show {
+  display: block;
+}
+.switch-link {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: #6b7686;
+}
+.switch-link a {
+  color: #4A90D9;
+  text-decoration: none;
+  font-weight: 600;
+  margin-left: 2px;
+}
+.switch-link a:hover {
+  text-decoration: underline;
+}
+</style>
+</head>
+<body>
+<div class="login-box">
+  <div class="logo-area">
+    <img src="/logo.svg" alt="Logo">
+    <h1>Telegram 监控后台</h1>
+    <p id="pageDesc">请输入账号密码登录</p>
+  </div>
+  <form id="loginForm">
+    <div class="form-group">
+      <label>用户名</label>
+      <input type="text" id="username" placeholder="请输入用户名" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>密码</label>
+      <input type="password" id="password" placeholder="请输入密码" autocomplete="current-password">
+    </div>
+    <button type="submit" class="btn-login" id="submitBtn">登录</button>
+    <div class="error-msg" id="errorMsg"></div>
+    <div class="switch-link">
+      <span id="switchText">还没有账号？</span>
+      <a href="#" id="switchLink" onclick="toggleMode(event)">去注册</a>
+    </div>
+  </form>
+</div>
+
+<script>
+	let mode = 'login'; // login / register
+	let registrationEnabled = true;
+	
+	// 检查注册开关
+	fetch('/api/public/registration-status')
+	  .then(r => r.json())
+	  .then(data => {
+	    registrationEnabled = data.registration_enabled;
+	    if (!registrationEnabled) {
+	      document.getElementById('switchLink').style.display = 'none';
+	      document.getElementById('switchText').textContent = '注册已关闭';
+	    }
+	  })
+	  .catch(() => {});
+
+function toggleMode(event) {
+  if (event) event.preventDefault();
+  mode = mode === 'login' ? 'register' : 'login';
+  const submitBtn = document.getElementById('submitBtn');
+  const pageDesc = document.getElementById('pageDesc');
+  const switchText = document.getElementById('switchText');
+  const switchLink = document.getElementById('switchLink');
+  document.getElementById('errorMsg').classList.remove('show');
+  if (mode === 'register') {
+    pageDesc.textContent = '创建新账号，注册后即可使用';
+    submitBtn.textContent = '注册';
+    switchText.textContent = '已有账号？';
+    switchLink.textContent = '去登录';
+    document.getElementById('password').setAttribute('autocomplete', 'new-password');
+  } else {
+    pageDesc.textContent = '请输入账号密码登录';
+    submitBtn.textContent = '登录';
+    switchText.textContent = '还没有账号？';
+    switchLink.textContent = '去注册';
+    document.getElementById('password').setAttribute('autocomplete', 'current-password');
+  }
+}
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  const submitBtn = document.getElementById('submitBtn');
+  const errorMsg = document.getElementById('errorMsg');
+
+  if (!username || !password) {
+    errorMsg.textContent = '请输入用户名和密码';
+    errorMsg.classList.add('show');
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = mode === 'register' ? '注册中...' : '登录中...';
+  errorMsg.classList.remove('show');
+
+  try {
+    const url = mode === 'register' ? '/api/register' : '/api/login';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username, password})
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      // 会话 Cookie 由服务端下发（HttpOnly，JS 不可读写），此处只需跳转
+      window.location.href = '/';
+    } else {
+      errorMsg.textContent = data.message || (mode === 'register' ? '注册失败' : '登录失败');
+      errorMsg.classList.add('show');
+      submitBtn.disabled = false;
+      submitBtn.textContent = mode === 'register' ? '注册' : '登录';
+    }
+  } catch (err) {
+    errorMsg.textContent = '网络错误，请重试';
+    errorMsg.classList.add('show');
+    submitBtn.disabled = false;
+    submitBtn.textContent = mode === 'register' ? '注册' : '登录';
+  }
+});
+</script>
+</body>
+</html>

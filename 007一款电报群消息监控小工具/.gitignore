@@ -1,0 +1,50 @@
+# 敏感配置
+config.json
+
+# Telegram session 文件
+session_*.session
+session_*.session-journal
+
+# 数据库（含定时备份快照）
+*.db
+*.db-wal
+*.db-shm
+history.db
+users.db
+backups/
+
+# 日志文件
+*.log
+logs/
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 媒体存档
+media/
+
+# 工作区本地数据（记忆 / 会话缓存）
+.workbuddy/
+
+# 测试缓存
+.pytest_cache/
