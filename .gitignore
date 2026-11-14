@@ -33,6 +33,3 @@ Thumbs.db
 
 # WPF 生成的临时工程
 *_wpftmp.csproj
-
-# 本项目随仓库分发构建产物，dist 需要纳入版本控制
-!/003一款查看端口占用的小工具/dist/

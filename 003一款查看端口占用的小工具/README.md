@@ -30,22 +30,25 @@
 
 ### 直接运行
 
-双击 `dist/PortMonitor.exe` 即可。自包含单文件，目标机器无需预装 .NET 运行时。
+双击 `PortMonitor/dist/PortMonitor.exe` 即可。自包含单文件，目标机器无需预装 .NET 运行时。
+
+该目录为本地发布产物，不纳入版本控制，可按下面的命令自行生成。
 
 ### 源码构建
 
 需要 Windows 10 / 11（64 位）与 .NET 10 SDK。
 
 ```bash
-# 在项目根目录（003一款查看端口占用的小工具）执行
+cd PortMonitor
 dotnet build PortMonitor.slnx
-dotnet run --project src/PortMonitor/PortMonitor.csproj
+dotnet run --project PortMonitor.csproj
 ```
 
 ### 打包单文件
 
 ```bash
-dotnet publish src/PortMonitor/PortMonitor.csproj -c Release -r win-x64 \
+cd PortMonitor
+dotnet publish PortMonitor.csproj -c Release -r win-x64 \
   --self-contained true -p:PublishSingleFile=true \
   -p:EnableCompressionInSingleFile=true \
   -p:IncludeNativeLibrariesForSelfExtract=true -o dist
@@ -66,16 +69,16 @@ dotnet publish src/PortMonitor/PortMonitor.csproj -c Release -r win-x64 \
 
 ```
 003一款查看端口占用的小工具/
-├── PortMonitor.slnx                 # 解决方案入口
 ├── README.md
-├── dist/                            # 发布产物（自包含单文件 exe）
 ├── images/                          # 界面截图
-└── src/PortMonitor/
+└── PortMonitor/
+    ├── PortMonitor.slnx             # 解决方案入口
     ├── PortMonitor.csproj           # net10.0-windows / WPF
     ├── app.manifest                 # asInvoker + PerMonitorV2 DPI + 长路径
     ├── App.xaml(.cs)                # 入口、Fluent 主题、全局异常兜底
     ├── MainWindow.xaml(.cs)         # 主窗口（固定尺寸，四个功能页）
     ├── Converters.cs                # 值转换器
+    ├── AssemblyInfo.cs              # 程序集元信息
     ├── Models/
     │   ├── ConnectionInfo.cs        # 端口连接记录
     │   ├── FileLockInfo.cs          # 文件占用记录（含句柄值）
@@ -96,10 +99,11 @@ dotnet publish src/PortMonitor/PortMonitor.csproj -c Release -r win-x64 \
     │   ├── FileLockViewModel.cs     # 文件占用
     │   ├── ObservableObject.cs      # INotifyPropertyChanged 基类
     │   └── RelayCommand.cs          # 同步 / 异步命令
-    └── Resources/
-        ├── Styles.xaml              # 卡片、按钮、胶囊样式
-        ├── app_icon.ico             # EXE 图标
-        └── app_icon.png             # 窗口图标
+    ├── Resources/
+    │   ├── Styles.xaml              # 卡片、按钮、胶囊样式
+    │   ├── app_icon.ico             # EXE 图标
+    │   └── app_icon.png             # 窗口图标
+    └── dist/                        # 发布产物（本地生成，不纳入版本控制）
 ```
 
 ## 实现要点
