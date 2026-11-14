@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 打包产物（不入库）
+build/
+dist/
+*.spec
+
+# 运行时导出
+leak_report_*.txt
+leak_report_*.json
+leak_report_*.csv
+fix_guide.txt
+
+# 编辑器 / 系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,6 @@
+# 运行时依赖
+PyQt6>=6.6
+requests>=2.31
+
+# 开发 / 打包相关（可选）
+#   pip install pyinstaller pillow

@@ -1,206 +1,260 @@
-# GitHub 仓库敏感文件泄露检查工具
+# GitHub 仓库敏感文件检查工具 v3.0
 
-一款用于检查 GitHub 仓库中敏感文件泄露风险的图形化工具。
+> 一款用来找出「不该提交却提交了」的文件的小工具：数据库文件、`.env`、私钥、备份包。
+> 支持本地目录、远程仓库、整用户批量扫描，结果按风险分级并直接给出可执行的清理命令。
 
-## 功能特性
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)
+![PyQt6](https://img.shields.io/badge/UI-PyQt6-41CD52?style=flat-square&logo=qt&logoColor=white)
+![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white)
+![Version](https://img.shields.io/badge/Version-3.0.0-3E6BFA?style=flat-square)
 
-### 多种扫描模式
-- **本地目录扫描**：扫描本地 Git 仓库中的敏感文件
-- **远程仓库扫描**：扫描 GitHub 远程仓库
-- **用户仓库批量扫描**：扫描指定用户名下的所有公开仓库
+---
 
-### 支持的敏感文件类型
-| 类型 | 文件扩展名 |
-|------|-----------|
-| SQLite 数据库 | `.db`, `.db3`, `.sqlite`, `.sqlite3`, `.sqlite2` |
-| MySQL 数据库 | `.sql`, `.mysqldump` |
-| PostgreSQL 相关 | `.pgpass`, `.psql_history` |
-| Access 数据库 | `.accdb`, `.mdb` |
-| 其他敏感文件 | `.bak`, `.backup`, `.env`, `database.json`, `credentials.json` 等 |
+## 界面预览
 
-### 主要功能
-- 自动检测仓库默认分支
-- 实时扫描进度显示
-- 风险等级自动评估（低危/中危/高危/严重）
-- 详细的解决方案建议
-- 多格式报告导出（TXT/JSON/CSV）
-- 批量任务管理
-- GitHub Token 支持（提高 API 限制）
+**扫描检查** — 一次扫描本地目录或远程仓库，结果按风险排序，支持排序、筛选与导出
 
-## 安装
+![扫描检查](./images/程序首页.png)
 
-### 环境要求
-- Python 3.7+
-- 依赖库：`requests`（可选，用于远程扫描）
+**批量任务** — 把多个本地目录与仓库排进队列一次跑完，可从剪贴板批量导入
 
-### 安装依赖
+![批量任务](./images/批量任务.png)
+
+**修复指引** — 按本次结果自动填好路径的命令清单，复制即用
+
+![修复指引](./images/修复指引.png)
+
+---
+
+## 一、v3.0 更新内容
+
+| 维度 | v2.x（Tkinter 单文件） | v3.0（PyQt6 分层） |
+| --- | --- | --- |
+| 架构 | 1900 行单文件，逻辑与界面互相调用 | `core`（纯逻辑，零 GUI 依赖）+ `ui`（PyQt6），入口薄到 20 行 |
+| 界面 | ttk 默认控件，两个页签 + 一张共用表格 | 左侧导航 + 卡片式布局 + 统计卡 + 风险徽章表格 + 轻提示（Toast） |
+| 主题 | 系统默认灰白 | 统一品牌蓝调色板，集中在 `ui/theme.py`，全局 QSS |
+| 图标 | 无 | 全新应用图标（矢量 SVG → 16–256 px 多尺寸 ICO），窗口 / 任务栏 / exe 全部生效 |
+| 本地扫描性能 | 每个命中文件跑 2 次 `git` 子进程，几百个文件就卡 | 整仓库 1 次 `git ls-files` + 1 次 `git check-ignore --stdin` |
+| 远程扫描 | 每个文件串行请求 contents API 取大小 | raw `HEAD` 取大小（不消耗 API 配额）+ 6 线程并发 |
+| 错误处理 | 403/404 只打一行进度就返回空列表 | 统一客户端，区分限流 / 无权限 / 网络异常，错误直达界面 |
+| 风险判定 | 界面与报告各写一套，结论会打架 | 单一 `assess_risk()`，界面、TXT、JSON、CSV 共用；新增 `secret` 类型 |
+| 结果表 | 固定列，不能排序筛选 | 点表头排序、关键字搜索、按风险过滤、仅看已提交 |
+| 报告 | 只有 TXT 内容较全 | TXT / JSON / CSV 三格式共享同一份数据模型，JSON 带统计摘要 |
+| 修复指引 | 固定模板，路径要自己改 | 按命中文件生成 `git rm --cached`、`git filter-repo`、BFG 命令 |
+| 可测试性 | 无 | 核心层 10 项单元测试，可脱离界面运行 |
+
+---
+
+## 二、运行环境
+
+- Windows 10 / 11
+- Python 3.10+（开发环境 3.13）
+- 依赖：`PyQt6`、`requests`
+
 ```bash
-pip install requests
+pip install -r requirements.txt
 ```
 
-### 运行
+---
+
+## 三、快速开始
+
+### 源码运行
+
 ```bash
-python 一款敏感文件检查的小工具.py
+cd 006一款敏感文件检查的小工具
+python "一款敏感文件检查的小工具.py"
 ```
 
-## 使用说明
+也可以用模块方式启动：
 
-### 单个扫描
-
-![单个扫描](images/1-单个扫描.png)
-
-1. 选择扫描模式：
-   - **本地目录**：选择本地文件夹进行扫描
-   - **GitHub 远程仓库**：输入仓库地址（支持 `owner/repo` 或完整 URL）
-   - **扫描用户所有仓库**：输入 GitHub 用户名，扫描其所有公开仓库
-
-2. 点击"开始扫描"按钮
-
-3. 查看扫描结果，双击可在浏览器中打开远程文件
-
-### 批量扫描
-
-![批量扫描](images/2-批量扫描.png)
-
-1. 切换到"批量扫描"标签页
-2. 添加扫描任务：
-   - 选择任务类型（本地目录/远程仓库）
-   - 输入目标路径或仓库地址
-   - 点击"添加任务"
-3. 支持从剪贴板批量导入
-4. 点击"开始批量扫描"
-
-### GitHub Token 配置
-
-使用 GitHub Token 可以：
-- 提高 API 请求限制（从 60次/小时 提升到 5000次/小时）
-- 访问私有仓库
-
-#### 生成 Fine-grained Personal Access Token
-
-**步骤一：进入 Token 设置页面**
-1. 登录 GitHub，点击右上角头像 → **Settings**
-2. 左侧边栏最底部，点击 **Developer settings**
-3. 点击 **Personal access tokens** → **Fine-grained tokens**
-4. 点击 **Generate new token**
-
-**步骤二：配置 Token 参数**
-
-| 参数 | 推荐设置 |
-|------|----------|
-| Token name | `repo-scanner`（自定义名称，便于识别） |
-| Expiration | 建议 **30 days** 或 **90 days**，避免长期暴露 |
-| Resource owner | 选择你的用户名 |
-| Repository access | **Only select repositories** → 勾选需要扫描的仓库（最小权限原则） |
-
-**步骤三：配置权限（最小权限原则）**
-
-只需选择以下两个权限：
-
-| 权限 | 级别 | 用途 |
-|------|------|------|
-| **Contents** | Read-only | 读取仓库的文件列表和文件内容，扫描敏感文件的基础 |
-| **Metadata** | Read-only | 读取仓库的基本信息（默认已勾选） |
-
-> ⚠️ **权限选择原则**：按需分配，最小权限。不需要 `repo` 完整权限，只需 `Contents: Read-only` 即可满足扫描需求。
-
-**步骤四：获取并保存 Token**
-1. 点击 **Generate token**
-2. 立即复制生成的以 `github_pat_` 开头的字符串
-3. **Token 只显示一次，请妥善保存**
-
-#### 在工具中使用 Token
-
-将生成的 Token 填入工具界面的 "GitHub Token" 输入框即可。
-
-> 💡 **提示**：如果只需要扫描公开仓库，可以不使用 Token，但 API 请求限制为 60次/小时。
-
-## 扫描结果
-
-### 风险等级说明
-| 等级 | 图标 | 说明 |
-|------|------|------|
-| 低危 | 🟢 | 公开数据文件，风险较低 |
-| 中危 | 🟡 | SQL 脚本等，可能暴露数据库结构 |
-| 高危 | 🟠 | 二进制数据库文件，可能包含真实数据 |
-| 严重 | 🔴 | 包含凭证、密码等敏感信息的文件 |
-
-### 结果操作
-- **双击**：在浏览器中打开远程文件 / 打开本地文件夹
-- **右键**：复制 URL、复制路径、打开文件夹
-- **导出报告**：导出 TXT/JSON/CSV 格式报告
-- **解决办法**：查看详细的修复建议
-
-## 报告示例
-
-```
-================================================================================
-GitHub 仓库数据库泄露检查报告
-================================================================================
-
-📅 扫描时间: 2026-03-19 13:14:17
-📊 发现问题: 10 个敏感文件
-📁 涉及仓库: 8 个
-
-================================================================================
-📦 仓库: ZeroOneCN/Simnotice
-================================================================================
-
-  [1] 文件: backend/data/simnotice.db
-      类型: SQLite 数据库
-      大小: 32 KB
-      状态: ✅ 确认存在
-      链接: https://github.com/ZeroOneCN/Simnotice/blob/main/backend/data/simnotice.db
-      风险等级: 🟠 高危
-      风险原因: 二进制数据库文件，可能包含真实数据
-
-================================================================================
-📈 风险统计
-================================================================================
-  • 总计发现: 10 个敏感文件
-  • 涉及仓库: 8 个
-  • 高危文件: 5 个
-  • 严重风险: 2 个
+```bash
+python -m leakscanner
 ```
 
-## 解决方案
+### 打包成单文件 exe
 
-### 立即行动
-1. 将敏感文件模式添加到 `.gitignore`：
-   ```
-   *.db
-   *.sqlite
-   *.sql
-   *.env
-   *.bak
-   ```
+```bash
+cd 006一款敏感文件检查的小工具
+python -m PyInstaller --noconfirm --clean --noconsole --onefile ^
+  --name "一款敏感文件检查的小工具" ^
+  --icon "assets\icon.ico" ^
+  --add-data "assets;assets" ^
+  "一款敏感文件检查的小工具.py"
+```
 
-2. 从 Git 历史中移除敏感文件：
-   ```bash
-   # 使用 git filter-branch
-   git filter-branch --force --index-filter \
-     "git rm --cached --ignore-unmatch PATH/TO/FILE.db" \
-     --prune-empty --tag-name-filter cat -- --all
-   git push origin --force --all
-   ```
+产物：`dist\一款敏感文件检查的小工具.exe`，约 39 MB，双击即可运行，无需安装 Python。
 
-3. 使用 BFG Repo-Cleaner（推荐）：
-   ```bash
-   java -jar bfg.jar --delete-files '*.db'
-   git reflog expire --expire=now --all
-   git gc --prune=now --aggressive
-   git push origin --force --all
-   ```
+> `--add-data` 与 `--icon` 都不能省：图标资源同时用于窗口、任务栏和 exe 文件本身。
+> `dist/`、`build/`、`*.spec` 已在 `.gitignore` 中排除，不会进入版本库。
 
-### 后续加固
-- 轮换所有可能泄露的密码和密钥
-- 使用环境变量管理敏感配置
-- 启用 pre-commit 钩子自动检查
-- 启用 GitHub Secret Scanning 功能
+---
 
-## 注意事项
+## 四、功能说明
 
-- GitHub API 有速率限制，建议使用 Token
-- 重写 Git 历史会影响所有协作者，操作前请备份
-- 如果仓库有 Fork，清理历史后文件仍可能存在于 Fork 中
-- 对于严重敏感数据泄露，建议联系 GitHub 支持
+### 1. 三种扫描模式
+
+| 模式 | 输入 | 说明 |
+| --- | --- | --- |
+| 本地目录 | 目录路径 | 遍历目录并标注每个文件是否已被 Git 跟踪；自动跳过 `.git`、`node_modules`、`dist`、`build` 等 |
+| 远程仓库 | `owner/repo`、仓库链接、`git@` SSH 地址 | 读取默认分支的完整文件树，私有仓库需 Token |
+| 用户全部仓库 | 用户名或主页链接 | 逐个扫描该用户名下的公开仓库，单个仓库失败自动跳过 |
+
+### 2. 批量任务
+
+- 右侧添加任务，或「从剪贴板导入」一次性粘贴多行地址（自动区分仓库与本地路径）
+- 队列按顺序执行，扫描完成后自动跳回「扫描检查」页汇总展示
+- 队列里单个目标出错只记一条提示，不中断整批
+
+### 3. 结果表
+
+| 操作 | 效果 |
+| --- | --- |
+| 单击表头 | 按该列排序，再点一次反向 |
+| 搜索框 | 按路径 / 来源 / 类型 / 风险原因过滤 |
+| 风险下拉 | 全部 / 仅严重 / 高危及以上 / 中危及以上 |
+| 勾选「仅已提交」 | 只留已经进入 Git 的文件 |
+| 双击行 | 远程文件在浏览器打开，本地文件打开所在文件夹 |
+| 右键 | 复制链接、复制路径、复制风险说明、打开修复指引 |
+| Ctrl + Enter | 在当前模式下快速开始扫描 |
+
+### 4. 报告导出
+
+一次扫描结果可导出三种格式，内容同源：
+
+- **TXT**：分组清单 + 风险统计 + 修复建议，适合直接贴给同事
+- **JSON**：带 `summary` 统计与完整字段，适合接 CI 或二次处理
+- **CSV**：一行一个文件，带 BOM，Excel 打开不乱码
+
+### 5. 修复指引
+
+点「修复指引」会按当前结果生成一份命令清单，路径已经填好：
+
+1. 阻断新增：`.gitignore` 模板
+2. 停止跟踪：逐条 `git rm --cached <路径>`
+3. 重写历史：`git filter-repo` 逐条命令 + BFG 方案 + 强推命令
+4. 善后：轮换凭证、开启 Secret Scanning、gitleaks 钩子配置
+
+> 重写历史会改变所有提交哈希，操作前请备份仓库；已有 Fork 需要单独处理。
+
+---
+
+## 五、检测规则与风险判定
+
+### 检测范围
+
+| 类型 | 匹配规则 |
+| --- | --- |
+| SQLite 数据库 | `.db` `.db3` `.sqlite` `.sqlite3` `.sqlite2` |
+| MySQL / SQL 脚本 | `.sql` `.mysqldump` `.sql.gz` |
+| PostgreSQL 相关 | `.pgpass` `.psql_history` `.pgdump` |
+| Access 数据库 | `.accdb` `.mdb` |
+| 凭证 / 密钥 | `.env` `.env.*` `credentials.json` `secrets.json` `id_rsa` 等私钥、`.pem` `.pfx` `.p12` `.keystore` `.jks` `.npmrc` `.pypirc` `.netrc` |
+| 备份 / 配置数据 | `.bak` `.backup` `database.json` `data.json` `db_config.json` `.dump` |
+
+### 风险等级
+
+| 等级 | 典型对象 | 判定要点 |
+| --- | --- | --- |
+| 严重 | 凭证、密钥、`.env`、`credentials.json` | 泄露等同于交出口令 |
+| 高危 | 二进制数据库（`.db` `.sqlite` `.mdb`）、Access、SQL 转储、文件名含 `user` / `account` | 通常含真实业务数据 |
+| 中危 | 普通 `.sql` 脚本、`.bak` / `.backup` | 可能暴露结构或残留数据 |
+| 低危 | `schema.sql` 之类纯结构文件 | 一般不含真实数据 |
+
+判定逻辑集中在 `leakscanner/core/rules.py` 的 `assess_risk()`，界面标签、表格颜色、三种报告格式都取自这同一份结论。
+
+---
+
+## 六、目录结构
+
+```
+006一款敏感文件检查的小工具/
+├── 一款敏感文件检查的小工具.py      # 入口（20 行，只负责启动）
+├── leakscanner/
+│   ├── core/                        # 纯逻辑层，不 import 任何 Qt
+│   │   ├── rules.py                 # 文件模式、类型元数据、风险判定
+│   │   ├── models.py                # ScanItem / ScanResult / ScanTask / ScanRequest
+│   │   ├── gitutil.py               # Git 跟踪与忽略状态（批量查询）
+│   │   ├── github.py                # GitHub API 客户端（重试 / 限流 / 错误语义）
+│   │   ├── engine.py                # 四种扫描方式 + 取消令牌
+│   │   └── report.py                # TXT / JSON / CSV 与修复指引
+│   └── ui/                          # PyQt6 界面层
+│       ├── theme.py                 # 调色板 + 全局 QSS + 图标加载
+│       ├── widgets.py               # 卡片、统计卡、分段控件、徽章、Toast
+│       ├── results_panel.py         # 统计 + 筛选 + 表格 + 导出
+│       ├── pages.py                 # 扫描检查 / 批量任务 / 使用说明
+│       ├── dialogs.py               # 修复指引对话框
+│       ├── main_window.py           # 导航 + 扫描线程调度
+│       └── app.py                   # QApplication 启动
+├── assets/                          # icon.svg（源）/ icon.ico / icon.png
+├── images/                          # README 截图
+├── tests/test_core.py               # 核心层单元测试
+├── tools/build_icons.py             # SVG → 多尺寸 ICO
+├── tools/screenshot.py              # 离屏渲染截图
+├── bfg.jar                          # BFG Repo-Cleaner（清理历史用）
+├── GitHub敏感文件清理教程.md         # 手把手清理教程
+├── requirements.txt
+└── README.md
+```
+
+分层约定：`core` 不依赖 Qt，`ui` 不写业务判断。想加一种检测规则或报告格式，只改 `core`；想改配色或布局，只改 `ui`。
+
+---
+
+## 七、开发与测试
+
+```bash
+# 核心层单元测试（不需要图形界面）
+python tests/test_core.py
+
+# 重新生成图标（改 assets/icon.svg 后执行）
+python tools/build_icons.py
+
+# 重新生成 README 截图
+python tools/screenshot.py
+```
+
+测试覆盖：文件模式识别、风险分级、仓库地址解析、本地扫描、目录排除、取消扫描、Git 状态查询、三种报告输出。
+
+---
+
+## 八、GitHub Token 配置
+
+Token 只保存在进程内存里，不写盘、不上传。匿名访问限额 60 次/小时，带 Token 提升到 5000 次/小时，并且能读私有仓库。
+
+推荐使用 Fine-grained token，权限最小化：
+
+| 项目 | 建议 |
+| --- | --- |
+| Token name | `leak-scanner` |
+| Expiration | 30 或 90 天 |
+| Repository access | Only select repositories（只勾要扫的） |
+| Permissions | **Contents: Read-only**、**Metadata: Read-only** |
+
+生成路径：`Settings → Developer settings → Personal access tokens → Fine-grained tokens`。
+
+---
+
+## 九、常见问题
+
+**Q：提示 API 配额用尽怎么办？**
+填 Token；或者等限流窗口重置（界面会给出重置时间）。
+
+**Q：私有仓库显示「不存在或无权访问」？**
+Fine-grained token 需要把目标仓库加入 `Repository access` 白名单，且 `Contents` 至少 Read-only。
+
+**Q：本地目录扫出来全是「未跟踪」，是不是没生效？**
+说明该目录不在 Git 工作区内，或者这些文件确实没被跟踪——这正是「还没泄露」的好状态；如果状态是「已跟踪」，才是需要处理的问题。
+
+**Q：仓库很大，结果不全？**
+GitHub 的文件树接口对超大仓库会截断（约 10 万条目），界面会给出提示。这种情况建议本地克隆后扫描本地目录。
+
+**Q：扫描会不会上传我的文件？**
+不会。本地扫描只读文件名、大小和 Git 状态；远程扫描只读取文件列表与大小，不下载文件内容。
+
+---
+
+## 十、相关文档
+
+- [GitHub 敏感文件清理教程](./GitHub敏感文件清理教程.md) —— 从发现到强推的完整流程
+- 仓库内的 `bfg.jar` 可直接用于清理 Git 历史
