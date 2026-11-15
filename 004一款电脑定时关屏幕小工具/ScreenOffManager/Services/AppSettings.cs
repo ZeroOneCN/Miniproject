@@ -11,9 +11,6 @@ public class AppSettings
     /// <summary>上次使用的自定义分钟数</summary>
     public string LastCustomMinutes { get; set; } = "10";
 
-    /// <summary>是否已经提示过"关闭窗口会留在托盘"</summary>
-    public bool TrayTipShown { get; set; }
-
     private static string DataDirectory => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ScreenOffManager");
 

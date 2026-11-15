@@ -50,8 +50,8 @@ public static class StartupManager
                     return;
                 }
 
-                // --tray：开机时静默启动到托盘，不弹窗打扰
-                key.SetValue(ValueName, $"\"{exe}\" --tray");
+                // 直接启动主界面：程序不常驻后台，启动即是可用状态
+                key.SetValue(ValueName, $"\"{exe}\"");
             }
             else
             {

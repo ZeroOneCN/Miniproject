@@ -8,11 +8,8 @@ public class MainViewModel : ObservableObject
     private readonly PowerSettingsService _service = new();
     private readonly AppSettings _settings;
 
-    /// <summary>需要在界面上弹窗提示（前台操作）</summary>
+    /// <summary>需要在界面上弹窗提示</summary>
     public event Action<string, string>? MessageRequested;
-
-    /// <summary>需要用托盘气泡提示（后台操作，不打断用户）</summary>
-    public event Action<string, string>? BalloonRequested;
 
     private string _schemeName = "读取中…";
     private string _timeoutText = "读取中…";
@@ -138,8 +135,8 @@ public class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>应用预设分钟数。showDialog=false 时用托盘气泡反馈（后台操作不打扰）</summary>
-    public async Task ApplyPresetAsync(int minutes, bool showDialog = true)
+    /// <summary>应用预设分钟数</summary>
+    public async Task ApplyPresetAsync(int minutes)
     {
         if (IsRefreshing) return;
         IsRefreshing = true;
@@ -150,12 +147,12 @@ public class MainViewModel : ObservableObject
         {
             await Task.Run(() => _service.SetScreenTimeout(minutes));
             await RefreshAsync();
-            Notify("设置成功", $"屏幕关闭时间已设置为「{label}」。", showDialog);
+            MessageRequested?.Invoke("设置成功", $"屏幕关闭时间已设置为「{label}」。");
         }
         catch (Exception ex)
         {
             Log.Error($"设置屏幕关闭时间失败（{label}）", ex);
-            Notify("设置失败", ex.Message, showDialog);
+            MessageRequested?.Invoke("设置失败", ex.Message);
             await RefreshAsync();
         }
         finally
@@ -184,13 +181,5 @@ public class MainViewModel : ObservableObject
         _settings.Save();
 
         await ApplyPresetAsync(minutes);
-    }
-
-    private void Notify(string title, string message, bool showDialog)
-    {
-        if (showDialog)
-            MessageRequested?.Invoke(title, message);
-        else
-            BalloonRequested?.Invoke(title, message);
     }
 }

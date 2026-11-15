@@ -5,8 +5,6 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <UseWPF>true</UseWPF>
-    <!-- 托盘图标使用 WinForms 的 NotifyIcon：零第三方依赖，不用引入 NuGet 包 -->
-    <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>Resources\app_icon.ico</ApplicationIcon>
@@ -19,9 +17,6 @@
     <AssemblyTitle>熄屏管家</AssemblyTitle>
     <Product>熄屏管家</Product>
     <Description>熄屏管家：快速查看与设置 Windows 屏幕关闭时间</Description>
-    <!-- WFO0003：WinForms 建议改用 ApplicationHighDpiMode，但本项目是 WPF 应用，
-         只有 NotifyIcon 用到 WinForms，DPI 感知必须由 manifest 声明，故忽略该告警 -->
-    <NoWarn>$(NoWarn);WFO0003</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

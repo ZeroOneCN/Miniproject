@@ -101,7 +101,7 @@
             </Grid>
         </GroupBox>
 
-        <!-- 底部：开机自启 + 托盘提示 -->
+        <!-- 底部：开机自启 -->
         <Grid Grid.Row="4" Margin="14,10,14,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
@@ -112,7 +112,7 @@
                       IsChecked="{Binding IsAutoStart}"
                       VerticalAlignment="Center" />
 
-            <TextBlock Grid.Column="1" Text="关闭窗口不退出，程序留在托盘"
+            <TextBlock Grid.Column="1" Text="关闭窗口即退出程序"
                        HorizontalAlignment="Right" VerticalAlignment="Center"
                        Foreground="#AAAAAA" FontSize="11" />
         </Grid>

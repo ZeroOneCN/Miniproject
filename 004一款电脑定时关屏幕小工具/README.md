@@ -17,7 +17,7 @@
 | **自定义设置** | 输入 0–1440 分钟，非法输入有明确提示，并记住上次的值 |
 | **读写方式** | 直接调用系统电源接口，不启动外部进程，无控制台窗口闪现 |
 | **语言无关** | 不解析系统输出文本，中文 / 英文 / 其他语言的 Windows 读数一致 |
-| **托盘常驻** | 关闭窗口只是收进托盘，右键菜单可直接切换，双击打开主界面 |
+| **关闭即退出** | 关窗即结束进程，不常驻后台、不留托盘图标 |
 | **开机自启** | 一键写入 `HKCU\...\Run`，免管理员、免任务计划 |
 | **单实例** | 重复启动会给出提示并退出，避免多开互抢设置 |
 | **异常兜底** | 全局异常捕获 + 文件日志，出问题能查得清 |
@@ -37,7 +37,7 @@
     ├── ScreenOffManager.csproj
     ├── app.manifest                        # asInvoker + PerMonitorV2 DPI 感知
     ├── AssemblyInfo.cs
-    ├── App.xaml / App.xaml.cs              # 入口：单实例、全局异常兜底、托盘生命周期
+    ├── App.xaml / App.xaml.cs              # 入口：单实例、全局异常兜底
     ├── MainWindow.xaml / MainWindow.xaml.cs
     ├── Models/
     │   └── PowerSchemeInfo.cs              # 电源方案数据模型 + 时长格式化
@@ -47,7 +47,6 @@
     │   ├── PowerSettingsService.cs         # 编排：原生优先，失败降级
     │   ├── AppSettings.cs                  # %AppData% 配置持久化
     │   ├── StartupManager.cs               # 开机自启（注册表 Run 项）
-    │   ├── TrayService.cs                  # 托盘图标与右键菜单
     │   └── Log.cs                          # 极简文件日志
     ├── ViewModels/
     │   ├── ObservableObject.cs             # INotifyPropertyChanged 基类
@@ -74,7 +73,6 @@
 |------|------|
 | .NET 10 / WPF | 桌面应用框架 |
 | `powrprof.dll` P/Invoke | 读写电源方案（`PowerReadACValueIndex` / `PowerWriteACValueIndex` 等） |
-| WinForms `NotifyIcon` | 托盘图标（`UseWindowsForms`，零第三方依赖） |
 | `Microsoft.Win32.Registry` | 开机自启 |
 | `System.Text.Json` | 配置持久化 |
 | MVVM | UI 与业务解耦 |
@@ -131,11 +129,11 @@ dotnet publish ScreenOffManager.csproj -c Release -r win-x64 \
 3. **自定义设置**：填分钟数后点「应用设置」（0 = 永不关闭）
 4. **开机自动启动**：勾选即写入注册表，取消即删除
 
-### 托盘
+### 退出程序
 
-- 点窗口右上角 **×** ≠ 退出，只是收进托盘（首次会弹气泡说明）
-- **双击**托盘图标：打开主界面
-- **右键**托盘图标：永不关闭 / 1 分钟 / 10 分钟 / 开机自启 / 退出
+- 点窗口右上角 **×** 即退出，进程随之结束，不常驻后台
+- 程序不提供托盘图标，也不支持手动最小化到托盘
+- 需要再次使用时重新启动即可
 
 ### 数据位置
 
