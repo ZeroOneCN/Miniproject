@@ -8,7 +8,7 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>摄像头监控台</AssemblyName>
     <RootNamespace>CameraMotionCapture.App</RootNamespace>
-    <Version>2.3.0</Version>
+    <Version>2.4.0</Version>
     <Product>摄像头监控台</Product>
     <Company>CameraMonitor</Company>
     <Description>轻量级多路摄像头监控台</Description>

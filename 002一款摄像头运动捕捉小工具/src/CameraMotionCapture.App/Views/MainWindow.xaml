@@ -138,6 +138,13 @@
                     <Button Content="全部停止" Style="{StaticResource GhostButton}" Margin="8,0,0,0"
                             Command="{Binding StopAllCommand}" />
 
+                    <!-- 录像只能手动开：程序启动、开始监控都不会自动录 -->
+                    <Button Content="{Binding RecordAllText}" Style="{StaticResource GhostButton}"
+                            Margin="8,0,0,0" Padding="14,7" FontWeight="SemiBold"
+                            Foreground="{Binding RecordAllBrush}"
+                            Command="{Binding RecordAllCommand}"
+                            ToolTip="对所有正在监控的通道开始 / 停止录像" />
+
                     <Rectangle Width="1" Height="20" Fill="{StaticResource BorderSoft}" Margin="14,0" />
 
                     <Button Content="刷新设备" Style="{StaticResource GhostButton}"

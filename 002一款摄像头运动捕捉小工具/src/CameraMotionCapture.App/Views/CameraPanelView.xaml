@@ -27,6 +27,11 @@
                         <StopStoryboard BeginStoryboardName="RecBlink" />
                     </DataTrigger.ExitActions>
                 </DataTrigger>
+
+                <!-- 已布防：琥珀底，和"真的在录"的红底区分开 -->
+                <DataTrigger Binding="{Binding RecordArmed}" Value="True">
+                    <Setter Property="Background" Value="#D9B4761E" />
+                </DataTrigger>
             </Style.Triggers>
         </Style>
     </UserControl.Resources>
@@ -110,7 +115,9 @@
             <!-- ══════ 画面 ══════ -->
             <!-- 不用 ScrollViewer：它给子元素的测量约束是无限大，Stretch 不会把画面缩到面板大小，
                  而是按原始像素尺寸溢出后被裁切。缩放/平移统一交给 RenderTransform，
-                 Image 的宽高由 code-behind 按「适应 / 填满」算好，保证变换数学永远基于真实内容尺寸。 -->
+                 Image 的宽高由 code-behind 按「适应 / 填满」等比算好；这里用 Uniform 而不是 Fill：
+                 万一宽高因取整/延迟和源比例差了零点几像素，Uniform 只会让边缘多出半根发丝的空隙，
+                 绝不会把画面拉变形。 -->
             <Grid x:Name="PreviewHost" Grid.Row="1" Background="{StaticResource VideoBack}" ClipToBounds="True"
                   SizeChanged="PreviewHost_SizeChanged"
                   MouseWheel="PreviewImage_MouseWheel"
@@ -119,8 +126,9 @@
                   MouseUp="PreviewImage_MouseUp"
                   MouseLeave="PreviewImage_MouseLeave">
                 <Image x:Name="PreviewImage"
-                       Source="{Binding CameraImage}"
-                       Stretch="Fill"
+                       Source="{Binding CameraImage, NotifyOnTargetUpdated=True}"
+                       TargetUpdated="PreviewImage_TargetUpdated"
+                       Stretch="Uniform"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        RenderOptions.BitmapScalingMode="HighQuality"
@@ -198,6 +206,14 @@
                         <Button Content="停止监控" Style="{StaticResource ChromeButton}"
                                 Command="{Binding StopCommand}"
                                 Visibility="{Binding IsMonitoring, Converter={StaticResource Vis}}" />
+
+                        <!-- 录像只认这一下点击：程序启动、开始监控都不会自己录 -->
+                        <Button Content="{Binding RecordButtonText}" Style="{StaticResource ChromeButton}"
+                                Command="{Binding ToggleRecordCommand}"
+                                Foreground="{Binding RecordButtonBrush}"
+                                FontWeight="SemiBold"
+                                ToolTip="{Binding RecordButtonTip}" />
+
                         <TextBlock Text="·" Foreground="#4A4F58" VerticalAlignment="Center" Margin="2,0" />
                         <Button Content="抓拍" Style="{StaticResource ChromeButton}"
                                 Command="{Binding SnapshotCommand}" />

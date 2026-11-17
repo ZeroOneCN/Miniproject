@@ -75,6 +75,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         RemoveCameraCommand = new RelayCommand(p => RemoveCamera(p as CameraPanelViewModel));
         StartAllCommand = new RelayCommand(_ => SetAllMonitoring(true), _ => HasCameras && !AllMonitoring);
         StopAllCommand = new RelayCommand(_ => SetAllMonitoring(false), _ => HasMonitoring);
+        RecordAllCommand = new RelayCommand(_ => SetAllRecording(!AnyRecordingRequested),
+            _ => HasMonitoring);
         SettingsCommand = new RelayCommand(_ => SettingsRequested?.Invoke(this, EventArgs.Empty));
         OpenSaveDirCommand = new RelayCommand(_ => OpenSaveDirectory());
         ClearEventsCommand = new RelayCommand(_ =>
@@ -255,8 +257,13 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
 
     public int MonitoringCount => Cameras.Count(c => c.IsMonitoring);
     public int RecordingCount => Cameras.Count(c => c.IsRecording);
+
+    /// <summary>已下达录像指令的路数（含"布防中"）</summary>
+    public int RecordingRequestedCount => Cameras.Count(c => c.RecordRequested);
+
     public bool HasMonitoring => MonitoringCount > 0;
     public bool AnyRecording => RecordingCount > 0;
+    public bool AnyRecordingRequested => RecordingRequestedCount > 0;
 
     /// <summary>是否已全部在监控（全部开始按钮据此置灰）</summary>
     public bool AllMonitoring => Cameras.Count > 0 && MonitoringCount == Cameras.Count;
@@ -266,6 +273,16 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         ? $"录制中 {RecordingCount} 路"
         : "未在录制";
 
+    /// <summary>顶栏「全部录像 / 停止全部录像」按钮文案</summary>
+    public string RecordAllText => AnyRecordingRequested ? "■ 停止全部录像" : "● 全部录像";
+
+    public bool IsAnyRecordingRequested => AnyRecordingRequested;
+
+    /// <summary>录着的时候按钮变红，没录时是中性灰</summary>
+    public System.Windows.Media.Brush RecordAllBrush => AnyRecordingRequested
+        ? System.Windows.Media.Brushes.Firebrick
+        : System.Windows.Media.Brushes.SlateGray;
+
     /// <summary>状态栏左侧那句话：优先反映"在录什么"，而不是"设置已应用"这种一次性提示</summary>
     public string LiveSummary
     {
@@ -273,9 +290,10 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         {
             if (Cameras.Count == 0) return "未检测到摄像头";
             if (!HasMonitoring) return $"{Cameras.Count} 路在线 · 未开始监控";
-            return AnyRecording
-                ? $"监控 {MonitoringCount} 路 · 录制 {RecordingCount} 路"
-                : $"监控 {MonitoringCount} 路 · 未录制（录像未开启或等待运动触发）";
+            if (AnyRecording) return $"监控 {MonitoringCount} 路 · 录制 {RecordingCount} 路";
+            return AnyRecordingRequested
+                ? $"监控 {MonitoringCount} 路 · 已布防，等待运动触发"
+                : $"监控 {MonitoringCount} 路 · 未录像（点「录像」才会开始）";
         }
     }
 
@@ -288,6 +306,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     public ICommand RemoveCameraCommand { get; }
     public ICommand StartAllCommand { get; }
     public ICommand StopAllCommand { get; }
+    public ICommand RecordAllCommand { get; }
     public ICommand SettingsCommand { get; }
     public ICommand OpenSaveDirCommand { get; }
     public ICommand ClearEventsCommand { get; }
@@ -305,11 +324,16 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     {
         OnPropertyChanged(nameof(MonitoringCount));
         OnPropertyChanged(nameof(RecordingCount));
+        OnPropertyChanged(nameof(RecordingRequestedCount));
         OnPropertyChanged(nameof(HasMonitoring));
         OnPropertyChanged(nameof(AnyRecording));
+        OnPropertyChanged(nameof(AnyRecordingRequested));
+        OnPropertyChanged(nameof(IsAnyRecordingRequested));
         OnPropertyChanged(nameof(AllMonitoring));
         OnPropertyChanged(nameof(MonitoringChipText));
         OnPropertyChanged(nameof(RecordingChipText));
+        OnPropertyChanged(nameof(RecordAllText));
+        OnPropertyChanged(nameof(RecordAllBrush));
         OnPropertyChanged(nameof(LiveSummary));
         CommandManager.InvalidateRequerySuggested();
     }
@@ -414,7 +438,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     private void OnPanelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(CameraPanelViewModel.IsMonitoring)
-            or nameof(CameraPanelViewModel.IsRecording))
+            or nameof(CameraPanelViewModel.IsRecording)
+            or nameof(CameraPanelViewModel.RecordRequested))
         {
             RefreshLiveState();
         }
@@ -450,8 +475,31 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         foreach (var cam in Cameras) cam.SetMonitoring(monitoring);
 
         StatusText = monitoring
-            ? $"已启动全部 {Cameras.Count} 路监控"
+            ? $"已启动全部 {Cameras.Count} 路监控（录像需手动点击）"
             : $"已停止全部 {Cameras.Count} 路监控（摄像头已释放）";
+
+        RefreshLiveState();
+    }
+
+    /// <summary>
+    /// 全部录像 / 停止全部录像。只对已在监控且录像功能开启的那几路生效——
+    /// 没有监控时本来就没有画面可录。
+    /// </summary>
+    private void SetAllRecording(bool on)
+    {
+        var targets = Cameras.Where(c => c.IsMonitoring).ToList();
+        if (targets.Count == 0)
+        {
+            StatusText = "先开始监控，再录像";
+            return;
+        }
+
+        foreach (var cam in targets) cam.SetRecording(on);
+
+        var effective = targets.Count(c => c.RecordRequested == on);
+        StatusText = on
+            ? $"已对 {effective} 路下达录像指令"
+            : $"已停止 {effective} 路录像";
 
         RefreshLiveState();
     }

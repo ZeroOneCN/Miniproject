@@ -72,12 +72,17 @@
             <TabItem Header="录像">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,12,4,4">
                     <StackPanel>
-                        <CheckBox x:Name="RecordEnabledCheck" Content="启用录像" FontWeight="SemiBold" />
+                        <CheckBox x:Name="RecordEnabledCheck" Content="启用录像功能" FontWeight="SemiBold" />
+
+                        <Border Background="{StaticResource AccentSoft}" CornerRadius="6" Padding="12,10" Margin="0,8,0,0">
+                            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#2A5FA8"
+                                       Text="程序启动和「开始监控」都不会自动录像。开启本项只是让每路面板上的「● 录像」按钮可点，点了才开始写文件；停止监控或退出程序即停止。录像按摄像头原始分辨率写入，不做任何拉伸。" />
+                        </Border>
 
                         <Label Content="录制模式" />
                         <ComboBox x:Name="RecordModeCombo">
-                            <ComboBoxItem Content="仅运动触发时录制" />
-                            <ComboBoxItem Content="监控期间持续录制" />
+                            <ComboBoxItem Content="一直录，直到手动停止" />
+                            <ComboBoxItem Content="布防后仅运动时录（省空间）" />
                         </ComboBox>
 
                         <Label Content="保存目录" />

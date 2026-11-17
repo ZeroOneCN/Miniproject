@@ -4,10 +4,14 @@ namespace CameraMotionCapture.Core.Models;
 
 public class RecordingSettings
 {
-    /// <summary>是否启用录像。默认关闭，避免开箱即写满硬盘。</summary>
-    public bool Enabled { get; set; } = false;
+    /// <summary>
+    /// 是否允许录像。只管"「录像」按钮能不能点"，程序启动与开始监控都不会自动录制——
+    /// 录像必须由人点一次「录像」才开始，这是刻意的：没人看着的时候不该无声无息写满硬盘。
+    /// </summary>
+    public bool Enabled { get; set; } = true;
 
-    public RecordMode Mode { get; set; } = RecordMode.MotionTrigger;
+    /// <summary>点「录像」之后的写入方式：持续录 / 只在运动时录</summary>
+    public RecordMode Mode { get; set; } = RecordMode.Continuous;
 
     public string SaveDir { get; set; } = "recordings";
 

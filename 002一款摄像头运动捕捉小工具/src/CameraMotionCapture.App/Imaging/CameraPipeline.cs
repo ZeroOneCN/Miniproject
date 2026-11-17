@@ -54,6 +54,7 @@ public sealed class CameraPipeline : IDisposable
     private volatile int _stateValue = (int)CameraState.Idle;
     private volatile bool _motionActive;
     private volatile bool _recording;
+    private volatile bool _recordRequested;
     private int _faceCount;
     private double _fps;
     private string _statusText = "未启动";
@@ -109,6 +110,15 @@ public sealed class CameraPipeline : IDisposable
     public bool IsMonitoring => _monitoring;
     public bool MotionActive => _motionActive;
     public bool IsRecording => _recording;
+
+    /// <summary>
+    /// 人是否按下了「录像」。只有它为 true 才可能写入文件——
+    /// 启动程序、开始监控都不会自己把它置 true。
+    /// </summary>
+    public bool RecordRequested => _recordRequested;
+
+    /// <summary>已下达录像指令但还没真正在写（运动触发模式下等运动）</summary>
+    public bool RecordArmed => _recordRequested && !_recording;
     public int FaceCount => Volatile.Read(ref _faceCount);
     public double Fps => Volatile.Read(ref _fps);
 
@@ -194,10 +204,23 @@ public sealed class CameraPipeline : IDisposable
         _monitoring = monitoring;
         if (!monitoring)
         {
+            // 停监控 = 忘掉录像指令：下次点「开始监控」不会自己接着录
+            _recordRequested = false;
             _motionActive = false;
             _recordUntil = DateTime.MinValue;
             _motion.Reset();
         }
+    }
+
+    /// <summary>
+    /// 唯一的录像入口。参数为 true 才开始写文件，为 false 立刻停止。
+    /// 采集循环每帧检查这个标记，所以点了就能看到 REC 变成计时。
+    /// </summary>
+    public void RequestRecord(bool on)
+    {
+        _recordRequested = on;
+        if (!on) _recordUntil = DateTime.MinValue;
+        Log.Information("摄像头 {Id} 录像指令：{Action}", CameraId, on ? "开始" : "停止");
     }
 
     /// <summary>
@@ -223,6 +246,7 @@ public sealed class CameraPipeline : IDisposable
 
         _motionActive = false;
         _recording = false;
+        _recordRequested = false;
         _recordStartedAt = DateTime.MinValue;
         _recordUntil = DateTime.MinValue;
         _stateValue = (int)CameraState.Idle;
@@ -436,9 +460,11 @@ public sealed class CameraPipeline : IDisposable
     {
         var rec = cfg.Recording;
 
-        if (!rec.Enabled || !_monitoring)
+        // 三道闸：功能开启、正在监控、人点了「录像」。少任何一道都不写文件，
+        // 所以程序启动、开始监控、运动检测都不会自己开录。
+        if (!rec.Enabled || !_monitoring || !_recordRequested)
         {
-            if (_recorder.IsRecording) { _recorder.Stop(); _recording = false; _recordStartedAt = DateTime.MinValue; }
+            StopRecording();
             return;
         }
 
@@ -449,13 +475,14 @@ public sealed class CameraPipeline : IDisposable
         }
         else
         {
+            // 运动触发模式：点了「录像」只是布防，有运动才真正写，运动停止若干秒后收尾
             if (motionNow) _recordUntil = now.AddSeconds(Math.Max(3, rec.MotionRecordSeconds));
             shouldWrite = now < _recordUntil;
         }
 
         if (!shouldWrite)
         {
-            if (_recorder.IsRecording) { _recorder.Stop(); _recording = false; _recordStartedAt = DateTime.MinValue; }
+            StopRecording();
             return;
         }
 
@@ -467,8 +494,7 @@ public sealed class CameraPipeline : IDisposable
 
             _recording = ok;
             _recordStartedAt = ok ? now : DateTime.MinValue;
-            if (ok) _statusText = "监控中 · 录制";
-            else _statusText = "监控中（录制启动失败）";
+            _statusText = ok ? "监控中 · 录制" : "监控中（录制启动失败）";
 
             if (!ok) return;
         }
@@ -476,12 +502,31 @@ public sealed class CameraPipeline : IDisposable
         _recorder.WriteFrame(frame);
     }
 
+    private void StopRecording()
+    {
+        if (!_recorder.IsRecording && !_recording) return;
+
+        var wasRecording = _recording || _recorder.IsRecording;
+
+        if (_recorder.IsRecording) _recorder.Stop();
+        _recording = false;
+        _recordStartedAt = DateTime.MinValue;
+
+        // 状态文字跟着回落，别让底栏一直挂着「监控中 · 录制」骗人
+        if (wasRecording && _statusText == "监控中 · 录制")
+            _statusText = _monitoring ? "监控中" : "已停止";
+    }
+
     private void PublishFrame(Mat bgr)
     {
         lock (_frameLock)
         {
             var need = bgr.Width * bgr.Height * 4;
-            if (_frameBuffer is null || _frameBuffer.Length != need)
+
+            // 尺寸必须每次都核对：只比缓冲区长度的话，1280×720 ↔ 720×1280 这种
+            // 长宽互换会蒙混过关，UI 拿旧尺寸读新帧就会错位/拉伸
+            if (_frameBuffer is null || _frameBuffer.Length != need
+                || _frameWidth != bgr.Width || _frameHeight != bgr.Height)
             {
                 _frameBuffer = new byte[need];
                 _frameWidth = bgr.Width;

@@ -79,17 +79,21 @@ public sealed class VideoRecordingService : IVideoRecordingService
                     if (!OpenSegmentCore()) return;
                 }
 
-                // 分辨率必须与编码器初始化时一致，否则 OpenCV 会静默丢弃
+                // 分辨率必须与编码器初始化时一致。设备重协商或网络摄像头切流时会变，
+                // 此时**按新尺寸重开一段**——绝不能 Cv2.Resize 到旧尺寸，
+                // 那会把画面按非等比拉伸，录下来的文件永久变形。
                 if (frame.Width != _width || frame.Height != _height)
                 {
-                    using var resized = new Mat();
-                    Cv2.Resize(frame, resized, new Size(_width, _height));
-                    _writer.Write(resized);
+                    Log.Information("录制分辨率变为 {W}×{H}（原 {OW}×{OH}），按新尺寸另起一段以保持成像比例",
+                        frame.Width, frame.Height, _width, _height);
+
+                    StopCore();
+                    _width = frame.Width;
+                    _height = frame.Height;
+                    if (!OpenSegmentCore()) return;
                 }
-                else
-                {
-                    _writer.Write(frame);
-                }
+
+                _writer.Write(frame);
 
                 if (!string.IsNullOrEmpty(_currentPath) && File.Exists(_currentPath))
                     _bytes = new FileInfo(_currentPath).Length;
@@ -127,12 +131,14 @@ public sealed class VideoRecordingService : IVideoRecordingService
             var name = $"{_fileNamePrefix}_cam{_cameraId}_{DateTime.Now:yyyyMMdd_HHmmss}{ext}";
             var path = Path.Combine(dir, name);
 
-            var writer = CreateWriter(path, _codec);
-            if (writer is null && _codec != "MJPG")
+            var codec = _codec;
+            var writer = CreateWriter(path, codec);
+            if (writer is null && codec != "MJPG")
             {
                 // 回退到兼容性最好的 MJPG
+                codec = "MJPG";
                 path = Path.ChangeExtension(path, ".avi");
-                writer = CreateWriter(path, "MJPG");
+                writer = CreateWriter(path, codec);
             }
 
             if (writer is null)
@@ -145,7 +151,8 @@ public sealed class VideoRecordingService : IVideoRecordingService
             _currentPath = path;
             _segmentStart = DateTime.Now;
 
-            Log.Information("开始录制分段：{Path}", path);
+            Log.Information("开始录制分段：{Path}（{W}×{H} · {Fps:F0}fps · {Codec}）",
+                path, _width, _height, _fps, codec);
             return true;
         }
         catch (Exception ex)

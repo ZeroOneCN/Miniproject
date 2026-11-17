@@ -34,6 +34,7 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
     private int _faceCount;
     private bool _motionActive;
     private bool _isRecording;
+    private bool _recordRequested;
     private bool _isOnline;
     private bool _isMonitoring;
     private bool _lastStopped;
@@ -57,6 +58,7 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
 
         StartCommand = new RelayCommand(_ => SetMonitoring(true), _ => !IsMonitoring);
         StopCommand = new RelayCommand(_ => SetMonitoring(false), _ => IsMonitoring);
+        ToggleRecordCommand = new RelayCommand(_ => ToggleRecording(), _ => CanToggleRecord);
         SnapshotCommand = new RelayCommand(_ => TakeSnapshot(), _ => IsOnline);
         ZoomInCommand = new RelayCommand(_ => ZoomLevel *= 1.25);
         ZoomOutCommand = new RelayCommand(_ => ZoomLevel *= 0.8);
@@ -129,6 +131,39 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
         private set => SetProperty(ref _isRecording, value);
     }
 
+    /// <summary>人已经按了「录像」（运动触发模式下可能还没真正开始写）</summary>
+    public bool RecordRequested
+    {
+        get => _recordRequested;
+        private set => SetProperty(ref _recordRequested, value);
+    }
+
+    /// <summary>已布防但还没在写：运动触发模式特有的中间态，必须在界面上说清楚</summary>
+    public bool RecordArmed => _recordRequested && !_isRecording;
+
+    /// <summary>录像按钮文案随状态变化，点之前就知道会发生什么</summary>
+    public string RecordButtonText => _isRecording
+        ? "■ 停止录像"
+        : _recordRequested ? "取消录像" : "● 录像";
+
+    public Brush RecordButtonBrush => _isRecording
+        ? DangerBrush
+        : _recordRequested ? ArmedBrush : VideoTextBrush;
+
+    public string RecordButtonTip
+    {
+        get
+        {
+            if (!_config.Recording.Enabled) return "录像功能已在「设置 → 录像」中关闭";
+            if (!IsMonitoring) return "先开始监控，再点录像";
+            if (_isRecording) return "停止并保存当前录像文件";
+            if (_recordRequested) return "取消布防，不再因运动自动写入";
+            return _config.Recording.Mode == RecordMode.MotionTrigger
+                ? "布防：检测到运动时才开始写入"
+                : "立即开始录像，直到再次点击";
+        }
+    }
+
     /// <summary>
     /// 一眼看懂当前到底在干什么：录制中带计时，监控但没录像时明确写出来，
     /// 免得用户点了「开始监控」后盯着画面猜"这算在录吗"。
@@ -142,6 +177,7 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
     /// <summary>状态胶囊的前景色 / 底色由它派生</summary>
     public Brush RecordBrush => _isRecording
         ? DangerBrush
+        : _recordRequested ? ArmedBrush
         : _isMonitoring ? Brushes.LimeGreen : Brushes.Gray;
 
     public bool ShowRecordChip => _isMonitoring || _isRecording;
@@ -169,6 +205,8 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
     }
 
     private static readonly Brush DangerBrush = Frozen("#E0524B");
+    private static readonly Brush ArmedBrush = Frozen("#E8A33D");
+    private static readonly Brush VideoTextBrush = Frozen("#D6DAE1");
     private static readonly Brush NeutralFpsBrush = Frozen("#7C838F");
     private static readonly Brush WarningFpsBrush = Frozen("#E8A33D");
 
@@ -227,6 +265,7 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
 
     public ICommand StartCommand { get; }
     public ICommand StopCommand { get; }
+    public ICommand ToggleRecordCommand { get; }
     public ICommand SnapshotCommand { get; }
     public ICommand ZoomInCommand { get; }
     public ICommand ZoomOutCommand { get; }
@@ -253,6 +292,8 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
         IsMonitoring = monitoring;
         if (!monitoring)
         {
+            // 停监控同时清掉录像指令：再点「开始监控」不会自己接着录
+            RecordRequested = false;
             IsRecording = false;
             MotionActive = false;
             Fps = 0;
@@ -260,7 +301,42 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
 
         OnPropertyChanged(nameof(IsStopped));
         OnPropertyChanged(nameof(StatusBrush));
+        NotifyRecordUi();
         CommandManager.InvalidateRequerySuggested();
+    }
+
+    private bool CanToggleRecord => IsMonitoring && _config.Recording.Enabled;
+
+    /// <summary>点一下就录，再点一下停。这是唯一的录像入口。</summary>
+    public void ToggleRecording() => SetRecording(!_recordRequested);
+
+    /// <summary>程序化设定录像状态（「全部录像」用），重复设定同一个值不会有副作用</summary>
+    public void SetRecording(bool on)
+    {
+        if (on && !CanToggleRecord) return;
+        if (_recordRequested == on) return;
+
+        _pipeline.RequestRecord(on);
+        RecordRequested = on;
+
+        StatusText = !on
+            ? (_isRecording ? "已停止录像" : "已取消录像")
+            : _config.Recording.Mode == RecordMode.MotionTrigger ? "已布防，等待运动" : "开始录像";
+
+        NotifyRecordUi();
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    /// <summary>录像相关的派生属性统一通知，避免某个位置漏掉导致界面不刷新</summary>
+    private void NotifyRecordUi()
+    {
+        OnPropertyChanged(nameof(RecordArmed));
+        OnPropertyChanged(nameof(RecordButtonText));
+        OnPropertyChanged(nameof(RecordButtonBrush));
+        OnPropertyChanged(nameof(RecordButtonTip));
+        OnPropertyChanged(nameof(RecordBrush));
+        OnPropertyChanged(nameof(ShowRecordChip));
+        OnPropertyChanged(nameof(RecordText));
     }
 
     public void ApplyConfig(AppConfig config)
@@ -268,6 +344,8 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
         _config = config;
         _pipeline.UpdateConfig(config);
         OnPropertyChanged(nameof(ShowFaceCount));
+        OnPropertyChanged(nameof(RecordButtonTip));
+        CommandManager.InvalidateRequerySuggested();
     }
 
     private void TakeSnapshot()
@@ -334,11 +412,15 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
     {
         var wasRecording = IsRecording;
         var wasMonitoring = IsMonitoring;
+        var wasRequested = _recordRequested;
         var wasLowFps = _lowFps;
 
         IsOnline = _pipeline.StateIsOnline;
         IsMonitoring = _pipeline.IsMonitoring;
         IsRecording = _pipeline.IsRecording;
+
+        // 录像指令以管线为准：运动触发模式下"已布防"和"正在录"是两个状态
+        RecordRequested = _pipeline.RecordRequested;
         MotionActive = _pipeline.MotionActive;
         Fps = Math.Round(_pipeline.Fps, 1);
 
@@ -357,14 +439,22 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
         var capture = _pipeline.CaptureInfo;
         if (capture != _captureInfo) CaptureInfo = capture;
 
-        // 录制状态文案：录制中带计时，未录像时明确写清楚为什么没有 REC
+        // 录制状态文案：录制中带计时，"布防"与"未录像"分开写，点了录像就不会看不出结果
         var record = BuildRecordText();
         if (record != _recordText) RecordText = record;
 
         _lowFps = Fps > 0 && _pipeline.RequestedFps > 0 && Fps < _pipeline.RequestedFps * 0.8;
 
-        if (wasRecording != IsRecording || wasMonitoring != IsMonitoring)
+        if (wasRecording != IsRecording || wasMonitoring != IsMonitoring
+            || wasRequested != _recordRequested)
+        {
             OnPropertyChanged(nameof(RecordBrush));
+            OnPropertyChanged(nameof(RecordArmed));
+            OnPropertyChanged(nameof(RecordButtonText));
+            OnPropertyChanged(nameof(RecordButtonBrush));
+            OnPropertyChanged(nameof(RecordButtonTip));
+            CommandManager.InvalidateRequerySuggested();
+        }
 
         if (wasLowFps != _lowFps)
             OnPropertyChanged(nameof(FpsBrush));
@@ -402,11 +492,14 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
 
         if (!IsMonitoring) return "已停止";
 
-        if (!_config.Recording.Enabled) return "监控中 · 录像未开启";
+        if (!_config.Recording.Enabled) return "监控中 · 录像功能已关闭";
 
-        return _config.Recording.Mode == RecordMode.MotionTrigger
-            ? "监控中 · 运动触发"
-            : "监控中";
+        if (_recordRequested)
+            return _config.Recording.Mode == RecordMode.MotionTrigger
+                ? "已布防 · 运动才录"
+                : "正在启动录像…";
+
+        return "监控中 · 未录像";
     }
 
     public void Dispose()

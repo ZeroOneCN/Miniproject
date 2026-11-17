@@ -12,8 +12,9 @@ namespace CameraMotionCapture.App.Views;
 /// <para>画面尺寸由这里算，而不是交给 <c>Stretch</c>：<c>Uniform</c> 会让控件保持整格大小、
 /// 内容在里面居中留黑边，于是 <c>RenderTransform</c> 缩放的是"整格"而不是"画面"，
 /// 平移边界也就全错了（放大后能拖出黑边）。现在的做法是——
-/// 按「适应 / 填满」算出画面应有的宽高设置给 Image，<c>Stretch=Fill</c> 只是把
-/// 位图铺满这个已等比算好的尺寸，变换与边界都基于真实内容尺寸。</para>
+/// 按「适应 / 填满」算出画面应有的宽高设置给 Image，宽高严格等于"源像素 × 同一个比例"，
+/// 所以永远不会出现横向和纵向比例不一致的拉伸；<c>Stretch=Uniform</c> 只是把这层等比
+/// 关系再兜一遍底（万一取整有误差，表现为边缘多出不到 1 像素的空隙，而不是把画面压扁）。</para>
 /// </summary>
 public partial class CameraPanelView : UserControl
 {
@@ -98,6 +99,20 @@ public partial class CameraPanelView : UserControl
 
     // ══════ 画面尺寸（适应 / 填满） ══════
 
+    /// <summary>
+    /// 位图真正落到 Image 上之后再算一次尺寸。
+    ///
+    /// <para>只靠 ViewModel 的 PropertyChanged 会漏一拍：面板控件可能是首帧之后才创建出来的，
+    /// 那时 DataContext 刚设上、绑定还没把 Source 推过来，读到的还是 null，于是停在上一次
+    /// 的"整格等比"，看起来就是上下两条黑边——而且只有窗口尺寸变化时才会被纠正。
+    /// <c>TargetUpdated</c> 是绑定值真正写进目标的那一刻，这里补算最可靠。</para>
+    /// </summary>
+    private void PreviewImage_TargetUpdated(object? sender, System.Windows.Data.DataTransferEventArgs e)
+    {
+        UpdateContentSize();
+        ApplyZoom(_zoom, null);
+    }
+
     /// <summary>按当前模式把画面缩放到宿主区域，并写回 Image 的实际宽高。</summary>
     private void UpdateContentSize()
     {
@@ -114,8 +129,10 @@ public partial class CameraPanelView : UserControl
             ? Math.Max(hostW / srcW, hostH / srcH)   // 填满：取较大比例，溢出部分被裁切
             : Math.Min(hostW / srcW, hostH / srcH);  // 适应：取较小比例，整体可见
 
-        PreviewImage.Width = Math.Ceiling(srcW * scale);
-        PreviewImage.Height = Math.Ceiling(srcH * scale);
+        // 宽高共用一个比例，且不取整：这是"不拉伸"的根本保证。
+        // 以前用 Math.Ceiling 会让宽高各自进位，长宽比就和源差了零点几个百分点。
+        PreviewImage.Width = srcW * scale;
+        PreviewImage.Height = srcH * scale;
     }
 
     // ══════ 缩放与平移 ══════
