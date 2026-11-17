@@ -73,8 +73,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         RefreshCommand = new AsyncRelayCommand(_ => RefreshAsync());
         AddIpCameraCommand = new RelayCommand(_ => AddIpCameraRequested?.Invoke(this, EventArgs.Empty));
         RemoveCameraCommand = new RelayCommand(p => RemoveCamera(p as CameraPanelViewModel));
-        StartAllCommand = new RelayCommand(_ => SetAllMonitoring(true));
-        StopAllCommand = new RelayCommand(_ => SetAllMonitoring(false));
+        StartAllCommand = new RelayCommand(_ => SetAllMonitoring(true), _ => HasCameras && !AllMonitoring);
+        StopAllCommand = new RelayCommand(_ => SetAllMonitoring(false), _ => HasMonitoring);
         SettingsCommand = new RelayCommand(_ => SettingsRequested?.Invoke(this, EventArgs.Empty));
         OpenSaveDirCommand = new RelayCommand(_ => OpenSaveDirectory());
         ClearEventsCommand = new RelayCommand(_ =>
@@ -84,6 +84,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         });
         OpenSnapshotCommand = new RelayCommand(p => OpenPath(p as string));
         ToggleFullscreenCommand = new RelayCommand(p => ToggleFullscreen(p as CameraPanelViewModel));
+        ToggleFillCommand = new RelayCommand(_ => FillScreen = !FillScreen);
 
         _diskGuardTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(Constants.DiskGuardIntervalSeconds) };
         _diskGuardTimer.Tick += (_, _) => RunDiskGuard();
@@ -159,8 +160,9 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// 网格行数。自动模式下按实际路数算，避免"两路画面占着 2×2 的一半、下面半屏全空"。
+    /// 全屏（单路放大）时固定 1×1，否则被选中的那路只会占左侧一格。
     /// </summary>
-    public int GridRows => _layout switch
+    public int GridRows => IsFullscreen ? 1 : _layout switch
     {
         LayoutMode.Single => 1,
         LayoutMode.Grid2x2 => 2,
@@ -168,7 +170,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         _ => AutoGrid.Rows
     };
 
-    public int GridColumns => _layout switch
+    public int GridColumns => IsFullscreen ? 1 : _layout switch
     {
         LayoutMode.Single => 1,
         LayoutMode.Grid2x2 => 2,
@@ -205,6 +207,10 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref _fullscreenCamera, value))
             {
                 OnPropertyChanged(nameof(IsFullscreen));
+                OnPropertyChanged(nameof(ShowEventBar));
+                // 全屏时网格必须变成 1×1，否则画面只占左上角一格
+                OnPropertyChanged(nameof(GridRows));
+                OnPropertyChanged(nameof(GridColumns));
                 RefreshVisibleCameras();
             }
         }
@@ -212,7 +218,66 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
 
     public bool IsFullscreen => _fullscreenCamera is not null;
 
+    private bool _eventBarVisible = true;
+
+    /// <summary>右上角「事件」开关的状态</summary>
+    public bool IsEventBarVisible
+    {
+        get => _eventBarVisible;
+        set
+        {
+            if (SetProperty(ref _eventBarVisible, value)) OnPropertyChanged(nameof(ShowEventBar));
+        }
+    }
+
+    /// <summary>事件栏是否占位：单路放大时让出整屏，退出后恢复原来的开关状态</summary>
+    public bool ShowEventBar => _eventBarVisible && !IsFullscreen;
+
     public bool IsSingleLayout => _layout == LayoutMode.Single;
+
+    /// <summary>画面填充方式：填满面板（裁切）或等比适应（留边）</summary>
+    public bool FillScreen
+    {
+        get => _config.Camera.FillScreen;
+        set
+        {
+            if (_config.Camera.FillScreen == value) return;
+            _config.Camera.FillScreen = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(FillModeText));
+            PersistConfig();
+        }
+    }
+
+    public string FillModeText => _config.Camera.FillScreen ? "填满" : "适应";
+
+    // ── 实时状态汇总（顶栏胶囊 / 状态栏 / 按钮可用性都吃这几个值） ──
+
+    public int MonitoringCount => Cameras.Count(c => c.IsMonitoring);
+    public int RecordingCount => Cameras.Count(c => c.IsRecording);
+    public bool HasMonitoring => MonitoringCount > 0;
+    public bool AnyRecording => RecordingCount > 0;
+
+    /// <summary>是否已全部在监控（全部开始按钮据此置灰）</summary>
+    public bool AllMonitoring => Cameras.Count > 0 && MonitoringCount == Cameras.Count;
+
+    public string MonitoringChipText => $"监控中 {MonitoringCount} 路";
+    public string RecordingChipText => RecordingCount > 0
+        ? $"录制中 {RecordingCount} 路"
+        : "未在录制";
+
+    /// <summary>状态栏左侧那句话：优先反映"在录什么"，而不是"设置已应用"这种一次性提示</summary>
+    public string LiveSummary
+    {
+        get
+        {
+            if (Cameras.Count == 0) return "未检测到摄像头";
+            if (!HasMonitoring) return $"{Cameras.Count} 路在线 · 未开始监控";
+            return AnyRecording
+                ? $"监控 {MonitoringCount} 路 · 录制 {RecordingCount} 路"
+                : $"监控 {MonitoringCount} 路 · 未录制（录像未开启或等待运动触发）";
+        }
+    }
 
     public bool HasEvents => Events.Count > 0;
 
@@ -228,6 +293,33 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     public ICommand ClearEventsCommand { get; }
     public ICommand OpenSnapshotCommand { get; }
     public ICommand ToggleFullscreenCommand { get; }
+    public ICommand ToggleFillCommand { get; }
+
+    // ───────────────────────────── 实时状态 ─────────────────────────────
+
+    /// <summary>
+    /// 把"在监控几路 / 在录几路"同步到顶栏胶囊、状态栏与按钮可用性。
+    /// 由面板的属性变更和 2 秒定时器共同驱动，保证点了开始就能立刻看到反馈。
+    /// </summary>
+    private void RefreshLiveState()
+    {
+        OnPropertyChanged(nameof(MonitoringCount));
+        OnPropertyChanged(nameof(RecordingCount));
+        OnPropertyChanged(nameof(HasMonitoring));
+        OnPropertyChanged(nameof(AnyRecording));
+        OnPropertyChanged(nameof(AllMonitoring));
+        OnPropertyChanged(nameof(MonitoringChipText));
+        OnPropertyChanged(nameof(RecordingChipText));
+        OnPropertyChanged(nameof(LiveSummary));
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    /// <summary>工具栏上的小操作（例如切换填充方式）也要落盘，下次启动保持</summary>
+    private void PersistConfig()
+    {
+        try { _settings.Save(_config); }
+        catch (Exception ex) { Log.Debug(ex, "保存配置失败"); }
+    }
 
     // ───────────────────────────── 摄像头管理 ─────────────────────────────
 
@@ -311,8 +403,21 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         panel.EventRaised += OnPanelEvent;
         panel.FullscreenToggleRequested += (s, _) => ToggleFullscreen(s as CameraPanelViewModel);
 
+        // 监控/录制状态一变就刷新顶栏与状态栏，不用等定时器那一拍
+        panel.PropertyChanged += OnPanelPropertyChanged;
+
         Cameras.Add(panel);
         _selectedCamera ??= panel;
+        RefreshLiveState();
+    }
+
+    private void OnPanelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(CameraPanelViewModel.IsMonitoring)
+            or nameof(CameraPanelViewModel.IsRecording))
+        {
+            RefreshLiveState();
+        }
     }
 
     private void RemoveCamera(CameraPanelViewModel? panel)
@@ -320,6 +425,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         if (panel is null) return;
 
         panel.EventRaised -= OnPanelEvent;
+        panel.PropertyChanged -= OnPanelPropertyChanged;
         Cameras.Remove(panel);
         panel.Dispose();
 
@@ -346,6 +452,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         StatusText = monitoring
             ? $"已启动全部 {Cameras.Count} 路监控"
             : $"已停止全部 {Cameras.Count} 路监控（摄像头已释放）";
+
+        RefreshLiveState();
     }
 
     public void ToggleFullscreen(CameraPanelViewModel? panel)
@@ -500,6 +608,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         catch { }
 
         _statTick++;
+        RefreshLiveState();
         if (_statTick % 5 == 0) UpdateDiskUsage();
     }
 
@@ -532,6 +641,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         foreach (var cam in Cameras.ToList())
         {
             cam.EventRaised -= OnPanelEvent;
+            cam.PropertyChanged -= OnPanelPropertyChanged;
             cam.Dispose();
         }
         Cameras.Clear();

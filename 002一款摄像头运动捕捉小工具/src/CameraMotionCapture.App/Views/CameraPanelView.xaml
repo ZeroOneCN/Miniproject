@@ -5,11 +5,48 @@
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="Vis" />
         <conv:InverseBoolToVisibilityConverter x:Key="InvVis" />
-        <conv:BoolToColorConverter x:Key="RecColor" />
+
+        <!-- 录制胶囊：录制中红底白字并呼吸闪烁，监控未录制时是低调的灰胶囊 -->
+        <Style x:Key="RecordChip" TargetType="Border">
+            <Setter Property="CornerRadius" Value="3" />
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="Background" Value="#1FFFFFFF" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsRecording}" Value="True">
+                    <Setter Property="Background" Value="{StaticResource Danger}" />
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard x:Name="RecBlink">
+                            <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                 From="1" To="0.55" Duration="0:0:0.9" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <StopStoryboard BeginStoryboardName="RecBlink" />
+                    </DataTrigger.ExitActions>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
 
-    <Border Margin="4" CornerRadius="8" Background="{StaticResource VideoBack}"
-            BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" ClipToBounds="True">
+    <Border x:Name="PanelRoot" Margin="4" CornerRadius="8" Background="{StaticResource VideoBack}"
+            ClipToBounds="True">
+        <Border.Style>
+            <Style TargetType="Border">
+                <Setter Property="BorderBrush" Value="{StaticResource BorderSoft}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Style.Triggers>
+                    <!-- 录制中整块面板描红边：多路同时监控时，扫一眼就知道哪几路在录 -->
+                    <DataTrigger Binding="{Binding IsRecording}" Value="True">
+                        <Setter Property="BorderBrush" Value="{StaticResource Danger}" />
+                        <Setter Property="BorderThickness" Value="2" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
+
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -21,6 +58,7 @@
             <Border Grid.Row="0" Background="{StaticResource VideoChrome}" Padding="10,6">
                 <Grid>
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
@@ -35,7 +73,15 @@
                                Foreground="{StaticResource VideoText}" FontSize="12.5"
                                FontWeight="SemiBold" VerticalAlignment="Center" />
 
-                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- 录制 / 监控状态胶囊 -->
+                    <Border Grid.Column="2" Style="{StaticResource RecordChip}" Margin="8,0,0,0"
+                            VerticalAlignment="Center"
+                            Visibility="{Binding ShowRecordChip, Converter={StaticResource Vis}}">
+                        <TextBlock Text="{Binding RecordText}" FontSize="10.5" FontWeight="SemiBold"
+                                   Foreground="White" VerticalAlignment="Center" />
+                    </Border>
+
+                    <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="{Binding DisplayTarget}" FontSize="11"
                                    Foreground="#7C838F" Margin="0,0,10,0" VerticalAlignment="Center" />
 
@@ -47,15 +93,11 @@
                         </Border>
 
                         <TextBlock Text="{Binding Fps, StringFormat={}{0:F0} fps}" FontSize="11"
-                                   Foreground="#7C838F" VerticalAlignment="Center" Margin="0,0,10,0" />
-
-                        <Ellipse Width="7" Height="7" VerticalAlignment="Center" Margin="0,0,4,0"
-                                 Fill="{Binding IsRecording, Converter={StaticResource RecColor}}" />
-                        <TextBlock Text="REC" FontSize="10" Foreground="#8A909B"
-                                   VerticalAlignment="Center" Margin="0,0,10,0" />
+                                   Foreground="{Binding FpsBrush}" VerticalAlignment="Center"
+                                   Margin="0,0,10,0" ToolTip="{Binding FpsToolTip}" />
 
                         <Button Content="⛶" Style="{StaticResource ChromeButton}" FontSize="13"
-                                Command="{Binding FullscreenCommand}" ToolTip="全屏（F11）" />
+                                Command="{Binding FullscreenCommand}" ToolTip="铺满窗口（F11）" />
                         <Button Content="✕" Style="{StaticResource ChromeButton}"
                                 Command="{Binding DataContext.RemoveCameraCommand,
                                           RelativeSource={RelativeSource AncestorType=Window}}"
@@ -66,9 +108,10 @@
             </Border>
 
             <!-- ══════ 画面 ══════ -->
-            <!-- 不用 ScrollViewer：它给子元素的测量约束是无限大，Stretch=Uniform 不会把画面缩到面板大小，
-                 而是按原始像素尺寸溢出后被裁切。缩放/平移统一交给 RenderTransform，数学在 code-behind 里算。 -->
-            <Grid Grid.Row="1" Background="{StaticResource VideoBack}" ClipToBounds="True"
+            <!-- 不用 ScrollViewer：它给子元素的测量约束是无限大，Stretch 不会把画面缩到面板大小，
+                 而是按原始像素尺寸溢出后被裁切。缩放/平移统一交给 RenderTransform，
+                 Image 的宽高由 code-behind 按「适应 / 填满」算好，保证变换数学永远基于真实内容尺寸。 -->
+            <Grid x:Name="PreviewHost" Grid.Row="1" Background="{StaticResource VideoBack}" ClipToBounds="True"
                   SizeChanged="PreviewHost_SizeChanged"
                   MouseWheel="PreviewImage_MouseWheel"
                   MouseDown="PreviewImage_MouseDown"
@@ -77,7 +120,9 @@
                   MouseLeave="PreviewImage_MouseLeave">
                 <Image x:Name="PreviewImage"
                        Source="{Binding CameraImage}"
-                       Stretch="Uniform"
+                       Stretch="Fill"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
                        RenderOptions.BitmapScalingMode="HighQuality"
                        RenderTransformOrigin="0,0">
                     <Image.RenderTransform>
@@ -112,11 +157,15 @@
                     <TextBlock Text="检测到运动" Foreground="White" FontSize="11" FontWeight="SemiBold" />
                 </Border>
 
-                <!-- 录制提示 -->
+                <!-- 右上角录制角标：红点 + 计时，缩到小面板也看得见 -->
                 <Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="0,10,10,0"
-                        Padding="8,3" CornerRadius="10" Background="#CCB03030"
+                        Padding="8,3" CornerRadius="10" Background="#E6C02020"
                         Visibility="{Binding IsRecording, Converter={StaticResource Vis}}">
-                    <TextBlock Text="● 录制中" Foreground="White" FontSize="10.5" />
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="7" Height="7" Fill="#FF5A52" VerticalAlignment="Center" Margin="0,0,5,0" />
+                        <TextBlock Text="{Binding RecordText}" Foreground="White" FontSize="10.5"
+                                   FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </StackPanel>
                 </Border>
 
                 <!-- 停止遮罩：设备已关闭，画面是最后一帧，必须让人一眼看出来不是"卡了" -->

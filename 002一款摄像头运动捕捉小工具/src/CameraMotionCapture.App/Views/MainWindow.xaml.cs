@@ -22,9 +22,13 @@ public partial class MainWindow : Window
 
         _viewModel.SettingsRequested += OnSettingsRequested;
         _viewModel.AddIpCameraRequested += OnAddIpCameraRequested;
+        _viewModel.PropertyChanged += OnViewModelPropertyChanged;
 
+        StateChanged += (_, _) => ApplyContentMargin();
         PreviewKeyDown += OnPreviewKeyDown;
         Closed += (_, _) => _viewModel.Dispose();
+
+        ApplyContentMargin();
 
         Log.Information("主窗口已就绪");
     }
@@ -54,12 +58,56 @@ public partial class MainWindow : Window
         Width = width;
         Height = height;
 
-        MaxWidth = work.Width;
-        MaxHeight = work.Height;
-
         WindowStartupLocation = WindowStartupLocation.Manual;
         Left = work.Left + (work.Width - width) / 2;
         Top = work.Top + (work.Height - height) / 2;
+    }
+
+    /// <summary>
+    /// 最大化时把内容边距收成 0。
+    /// <para>普通窗口需要一圈留白才好看，但最大化状态下还留 12px，四周就会露出一条浅色/深色边，
+    /// 看着就像"窗口没铺满"。</para>
+    /// </summary>
+    private void ApplyContentMargin()
+    {
+        ContentRoot.Margin = WindowState == WindowState.Normal
+            ? new Thickness(12, 10, 12, 10)
+            : new Thickness(0);
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainViewModel.IsFullscreen)) ApplyFullscreenChrome();
+    }
+
+    /// <summary>
+    /// 单路放大 = 去掉标题栏 + 最大化，像正经监控软件那样把画面铺满整块屏。
+    /// 用 <c>WindowStyle</c> 而不是 <c>WindowState.Maximized</c> 单独实现，
+    /// 是为了让 F11 和面板上的 ⛶ 行为一致。
+    /// </summary>
+    private void ApplyFullscreenChrome()
+    {
+        try
+        {
+            if (_viewModel.IsFullscreen)
+            {
+                WindowStyle = WindowStyle.None;
+                ResizeMode = ResizeMode.NoResize;
+                WindowState = WindowState.Maximized;
+            }
+            else
+            {
+                WindowStyle = WindowStyle.SingleBorderWindow;
+                ResizeMode = ResizeMode.CanResize;
+                WindowState = WindowState.Normal;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "切换全屏外观失败");
+        }
+
+        ApplyContentMargin();
     }
 
     // ══════════════════ 快捷键 ══════════════════

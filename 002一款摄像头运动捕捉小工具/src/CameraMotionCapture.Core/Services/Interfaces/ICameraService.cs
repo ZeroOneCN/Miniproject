@@ -11,6 +11,15 @@ public interface ICameraService : IDisposable
     int FrameWidth { get; }
     int FrameHeight { get; }
 
+    /// <summary>驱动回报的帧率（可能高于实测值，仅供参考）</summary>
+    double NegotiatedFps { get; }
+
+    /// <summary>协商到的像素格式，如 MJPG / YUY2；取不到时返回 "—"</summary>
+    string FourCc { get; }
+
+    /// <summary>实际打开成功的采集后端，如 DSHOW / MSMF</summary>
+    string BackendName { get; }
+
     /// <summary>打开本地/USB 摄像头</summary>
     bool Open(int cameraId, string? backend = null, int width = 1280, int height = 720, int fps = 20, bool hardwareAccel = false);
 

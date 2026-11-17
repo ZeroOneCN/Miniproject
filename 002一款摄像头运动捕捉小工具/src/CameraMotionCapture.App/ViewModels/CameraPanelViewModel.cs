@@ -39,6 +39,9 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
     private bool _lastStopped;
     private double _zoomLevel = 1.0;
     private ImageSource? _cameraImage;
+    private string _recordText = string.Empty;
+    private string _captureInfo = "—";
+    private bool _lowFps;
 
     /// <summary>产生一条事件（运动、掉线等），由主视图模型收集</summary>
     public event EventHandler<MonitorEvent>? EventRaised;
@@ -124,6 +127,56 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
     {
         get => _isRecording;
         private set => SetProperty(ref _isRecording, value);
+    }
+
+    /// <summary>
+    /// 一眼看懂当前到底在干什么：录制中带计时，监控但没录像时明确写出来，
+    /// 免得用户点了「开始监控」后盯着画面猜"这算在录吗"。
+    /// </summary>
+    public string RecordText
+    {
+        get => _recordText;
+        private set => SetProperty(ref _recordText, value);
+    }
+
+    /// <summary>状态胶囊的前景色 / 底色由它派生</summary>
+    public Brush RecordBrush => _isRecording
+        ? DangerBrush
+        : _isMonitoring ? Brushes.LimeGreen : Brushes.Gray;
+
+    public bool ShowRecordChip => _isMonitoring || _isRecording;
+
+    /// <summary>协商到的采集参数（分辨率 / 编码 / 后端），放在帧率旁边做 ToolTip</summary>
+    public string CaptureInfo
+    {
+        get => _captureInfo;
+        private set => SetProperty(ref _captureInfo, value);
+    }
+
+    public string FpsToolTip =>
+        $"实测 {_fps:F1} fps\n设定 {_pipeline.RequestedFps} fps\n{CaptureInfo}\n" +
+        "低于设定值时常见原因：暗光下自动曝光拉长、USB 带宽不足（未协商到 MJPG）、设备本身不支持该分辨率下的高帧率";
+
+    /// <summary>实测帧率明显低于设定值时变琥珀色，提示"你的相机没跑到设定帧率"</summary>
+    public Brush FpsBrush
+    {
+        get
+        {
+            var requested = _pipeline.RequestedFps;
+            if (_fps <= 0 || requested <= 0) return NeutralFpsBrush;
+            return _fps < requested * 0.8 ? WarningFpsBrush : NeutralFpsBrush;
+        }
+    }
+
+    private static readonly Brush DangerBrush = Frozen("#E0524B");
+    private static readonly Brush NeutralFpsBrush = Frozen("#7C838F");
+    private static readonly Brush WarningFpsBrush = Frozen("#E8A33D");
+
+    private static Brush Frozen(string color)
+    {
+        var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
+        brush.Freeze();
+        return brush;
     }
 
     public bool IsOnline
@@ -279,6 +332,10 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
 
     private void SyncStatus()
     {
+        var wasRecording = IsRecording;
+        var wasMonitoring = IsMonitoring;
+        var wasLowFps = _lowFps;
+
         IsOnline = _pipeline.StateIsOnline;
         IsMonitoring = _pipeline.IsMonitoring;
         IsRecording = _pipeline.IsRecording;
@@ -296,6 +353,23 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
 
         var status = _pipeline.StatusText;
         if (status != StatusText) StatusText = status;
+
+        var capture = _pipeline.CaptureInfo;
+        if (capture != _captureInfo) CaptureInfo = capture;
+
+        // 录制状态文案：录制中带计时，未录像时明确写清楚为什么没有 REC
+        var record = BuildRecordText();
+        if (record != _recordText) RecordText = record;
+
+        _lowFps = Fps > 0 && _pipeline.RequestedFps > 0 && Fps < _pipeline.RequestedFps * 0.8;
+
+        if (wasRecording != IsRecording || wasMonitoring != IsMonitoring)
+            OnPropertyChanged(nameof(RecordBrush));
+
+        if (wasLowFps != _lowFps)
+            OnPropertyChanged(nameof(FpsBrush));
+
+        OnPropertyChanged(nameof(ShowRecordChip));
 
         // 运动事件：管线用自增序号通知，避免跨线程回调
         var seq = _pipeline.MotionEventSeq;
@@ -316,6 +390,23 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
                 });
             }
         }
+    }
+
+    private string BuildRecordText()
+    {
+        if (_pipeline.IsRecording)
+        {
+            var elapsed = _pipeline.RecordingElapsed;
+            return $"REC {(int)elapsed.TotalHours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}";
+        }
+
+        if (!IsMonitoring) return "已停止";
+
+        if (!_config.Recording.Enabled) return "监控中 · 录像未开启";
+
+        return _config.Recording.Mode == RecordMode.MotionTrigger
+            ? "监控中 · 运动触发"
+            : "监控中";
     }
 
     public void Dispose()

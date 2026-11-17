@@ -10,6 +10,12 @@ public class CameraSettings
     public int Fps { get; set; } = Constants.DefaultFps;
     public bool HardwareAccel { get; set; } = false;
 
+    /// <summary>
+    /// 画面填充方式：true = 填满面板（裁切溢出部分，不留黑边）；false = 等比适应（完整可见，可能留边）。
+    /// 默认填满 —— 监控场景里一屏黑边比少量裁切更难受。
+    /// </summary>
+    public bool FillScreen { get; set; } = true;
+
     public string BackendName => Backend switch
     {
         CaptureBackend.DShow => "DSHOW",

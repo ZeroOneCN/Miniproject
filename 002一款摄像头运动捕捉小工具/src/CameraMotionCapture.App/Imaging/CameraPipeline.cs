@@ -65,7 +65,10 @@ public sealed class CameraPipeline : IDisposable
     private DateTime _lastFaceCheck = DateTime.MinValue;
     private DateTime _lastNotifyAt = DateTime.MinValue;
     private DateTime _recordUntil = DateTime.MinValue;
+    private DateTime _recordStartedAt = DateTime.MinValue;
     private DateTime _fpsWindowStart = DateTime.Now;
+    private DateTime _openAt = DateTime.MinValue;
+    private bool _fpsVerified;
     private int _fpsFrames;
     private int _readFailures;
     private int _reconnectDelaySec = 1;
@@ -108,6 +111,14 @@ public sealed class CameraPipeline : IDisposable
     public bool IsRecording => _recording;
     public int FaceCount => Volatile.Read(ref _faceCount);
     public double Fps => Volatile.Read(ref _fps);
+
+    /// <summary>本次录像开始时间；未在录制时是 <see cref="DateTime.MinValue"/></summary>
+    public DateTime RecordingStartedAt => _recordStartedAt;
+
+    /// <summary>已录制时长（未录制时为零）</summary>
+    public TimeSpan RecordingElapsed =>
+        _recording && _recordStartedAt > DateTime.MinValue ? DateTime.Now - _recordStartedAt : TimeSpan.Zero;
+
     public string StatusText => _statusText;
     public long FrameVersion => Volatile.Read(ref _frameVersion);
     public long MotionEventSeq => Volatile.Read(ref _motionEventSeq);
@@ -212,6 +223,7 @@ public sealed class CameraPipeline : IDisposable
 
         _motionActive = false;
         _recording = false;
+        _recordStartedAt = DateTime.MinValue;
         _recordUntil = DateTime.MinValue;
         _stateValue = (int)CameraState.Idle;
         _statusText = "已停止";
@@ -369,9 +381,24 @@ public sealed class CameraPipeline : IDisposable
         var elapsed = (now - _fpsWindowStart).TotalSeconds;
         if (elapsed >= 1.0)
         {
-            Volatile.Write(ref _fps, _fpsFrames / elapsed);
+            var measured = _fpsFrames / elapsed;
+            Volatile.Write(ref _fps, measured);
             _fpsFrames = 0;
             _fpsWindowStart = now;
+
+            // 打开后 4 秒报一次实测值：配置 30 却只跑 10 时，这里能直接看出是驱动没给够
+            if (!_fpsVerified && _openAt > DateTime.MinValue && (now - _openAt).TotalSeconds >= 4)
+            {
+                _fpsVerified = true;
+                var requested = cfg.Camera.Fps;
+                if (measured < requested * 0.8)
+                    Log.Warning("摄像头 {Id} 实测 {Measured:F1}fps，低于设定的 {Requested}fps（{Info}）" +
+                                "；常见原因：驱动没给到 MJPG（USB 带宽不够）、暗光下自动曝光拉长，或该分辨率下设备本身到不了这么高",
+                        CameraId, measured, requested, CaptureInfo);
+                else
+                    Log.Information("摄像头 {Id} 实测 {Measured:F1}fps，符合设定 {Requested}fps（{Info}）",
+                        CameraId, measured, requested, CaptureInfo);
+            }
         }
     }
 
@@ -411,7 +438,7 @@ public sealed class CameraPipeline : IDisposable
 
         if (!rec.Enabled || !_monitoring)
         {
-            if (_recorder.IsRecording) { _recorder.Stop(); _recording = false; }
+            if (_recorder.IsRecording) { _recorder.Stop(); _recording = false; _recordStartedAt = DateTime.MinValue; }
             return;
         }
 
@@ -428,7 +455,7 @@ public sealed class CameraPipeline : IDisposable
 
         if (!shouldWrite)
         {
-            if (_recorder.IsRecording) { _recorder.Stop(); _recording = false; }
+            if (_recorder.IsRecording) { _recorder.Stop(); _recording = false; _recordStartedAt = DateTime.MinValue; }
             return;
         }
 
@@ -439,6 +466,7 @@ public sealed class CameraPipeline : IDisposable
                 rec.SegmentMinutes, rec.UseDailyFolder);
 
             _recording = ok;
+            _recordStartedAt = ok ? now : DateTime.MinValue;
             if (ok) _statusText = "监控中 · 录制";
             else _statusText = "监控中（录制启动失败）";
 
@@ -539,7 +567,9 @@ public sealed class CameraPipeline : IDisposable
 
         if (opened)
         {
-            Log.Information("摄像头 {Id} 已连接", CameraId);
+            _openAt = DateTime.Now;
+            _fpsVerified = false;
+            Log.Information("摄像头 {Id} 已连接：{Info}", CameraId, CaptureInfo);
             return true;
         }
 
@@ -550,6 +580,13 @@ public sealed class CameraPipeline : IDisposable
         _reconnectDelaySec = Math.Min(_reconnectDelaySec * 2, 15);   // 上限 15 秒：等太久用户会以为坏了
         return false;
     }
+
+    /// <summary>协商到的采集参数，形如 "1920×1080 · MJPG · DSHOW"</summary>
+    public string CaptureInfo =>
+        $"{_camera.FrameWidth}×{_camera.FrameHeight} · {_camera.FourCc} · {_camera.BackendName}";
+
+    /// <summary>配置里要求的帧率，用于和实测值对照</summary>
+    public int RequestedFps => SnapshotConfig().Camera.Fps;
 
     /// <summary>返回 true 表示已进入重连流程，本轮跳过后续处理。</summary>
     private bool HandleReadFailure()
@@ -579,6 +616,7 @@ public sealed class CameraPipeline : IDisposable
         {
             if (_recorder.IsRecording) _recorder.Stop();
             _recording = false;
+            _recordStartedAt = DateTime.MinValue;
             _camera.Close();
         }
         catch (Exception ex)

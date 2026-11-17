@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
 using CameraMotionCapture.App.ViewModels;
 
 namespace CameraMotionCapture.App.Views;
@@ -8,10 +9,11 @@ namespace CameraMotionCapture.App.Views;
 /// <summary>
 /// 单个摄像头面板：滚轮缩放、拖拽平移、双击复位。
 ///
-/// <para>旧实现把缩放交给 <c>RenderTransform</c>，却把平移交给 <c>ScrollViewer</c> 的滚动偏移。
-/// 两者不联动——<c>RenderTransform</c> 不改变布局尺寸，ScrollViewer 的滚动范围始终是 0，
-/// 所以放大后既拖不动、也看不到被裁掉的部分。现在统一用
-/// <c>ScaleTransform + TranslateTransform</c>，平移量按缩放倍数夹紧，不会把画面拖出视野。</para>
+/// <para>画面尺寸由这里算，而不是交给 <c>Stretch</c>：<c>Uniform</c> 会让控件保持整格大小、
+/// 内容在里面居中留黑边，于是 <c>RenderTransform</c> 缩放的是"整格"而不是"画面"，
+/// 平移边界也就全错了（放大后能拖出黑边）。现在的做法是——
+/// 按「适应 / 填满」算出画面应有的宽高设置给 Image，<c>Stretch=Fill</c> 只是把
+/// 位图铺满这个已等比算好的尺寸，变换与边界都基于真实内容尺寸。</para>
 /// </summary>
 public partial class CameraPanelView : UserControl
 {
@@ -23,11 +25,32 @@ public partial class CameraPanelView : UserControl
     private Point _lastMousePosition;
     private double _zoom = 1.0;
 
+    /// <summary>true = 填满（裁切掉超出部分，不留黑边）；false = 适应（等比缩放到完整可见）</summary>
+    public static readonly DependencyProperty FillModeProperty = DependencyProperty.Register(
+        nameof(FillMode), typeof(bool), typeof(CameraPanelView),
+        new PropertyMetadata(true, OnFillModeChanged));
+
+    public bool FillMode
+    {
+        get => (bool)GetValue(FillModeProperty);
+        set => SetValue(FillModeProperty, value);
+    }
+
+    private static void OnFillModeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is CameraPanelView view)
+        {
+            view.UpdateContentSize();
+            view.ApplyZoom(view._zoom, null);
+        }
+    }
+
     public CameraPanelView()
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
         Unloaded += OnUnloaded;
+        Loaded += (_, _) => UpdateContentSize();
     }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -40,6 +63,7 @@ public partial class CameraPanelView : UserControl
         if (_viewModel is not null)
         {
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+            UpdateContentSize();
             ApplyZoom(_viewModel.ZoomLevel, null);
         }
         else
@@ -56,67 +80,102 @@ public partial class CameraPanelView : UserControl
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(CameraPanelViewModel.ZoomLevel) || _viewModel is null) return;
+        switch (e.PropertyName)
+        {
+            // 分辨率/首帧到达时画面尺寸会变，重新算一次等比尺寸
+            case nameof(CameraPanelViewModel.CameraImage):
+                UpdateContentSize();
+                ApplyZoom(_zoom, null);
+                break;
 
-        // 滚轮已经在事件里按鼠标位置缩放过了，这里只处理工具栏按钮等程序化改动
-        if (Math.Abs(_viewModel.ZoomLevel - _zoom) < 0.001) return;
+            case nameof(CameraPanelViewModel.ZoomLevel) when _viewModel is not null:
+                // 滚轮已经在事件里按鼠标位置缩放过了，这里只处理工具栏按钮等程序化改动
+                if (Math.Abs(_viewModel.ZoomLevel - _zoom) < 0.001) return;
+                ApplyZoom(_viewModel.ZoomLevel, null);
+                break;
+        }
+    }
 
-        ApplyZoom(_viewModel.ZoomLevel, null);
+    // ══════ 画面尺寸（适应 / 填满） ══════
+
+    /// <summary>按当前模式把画面缩放到宿主区域，并写回 Image 的实际宽高。</summary>
+    private void UpdateContentSize()
+    {
+        var hostW = PreviewHost.ActualWidth;
+        var hostH = PreviewHost.ActualHeight;
+        if (hostW <= 0 || hostH <= 0) return;
+
+        var source = PreviewImage.Source as BitmapSource;
+        double srcW = source?.PixelWidth ?? 0;
+        double srcH = source?.PixelHeight ?? 0;
+        if (srcW <= 0 || srcH <= 0) return;
+
+        var scale = FillMode
+            ? Math.Max(hostW / srcW, hostH / srcH)   // 填满：取较大比例，溢出部分被裁切
+            : Math.Min(hostW / srcW, hostH / srcH);  // 适应：取较小比例，整体可见
+
+        PreviewImage.Width = Math.Ceiling(srcW * scale);
+        PreviewImage.Height = Math.Ceiling(srcH * scale);
     }
 
     // ══════ 缩放与平移 ══════
 
     /// <summary>
-    /// 应用缩放。<paramref name="anchor"/> 为缩放锚点（控件坐标，通常是鼠标位置），
+    /// 应用缩放。<paramref name="anchor"/> 为宿主区域坐标（通常是鼠标位置），
     /// 传 null 表示以画面中心为锚点。
     /// </summary>
     private void ApplyZoom(double level, Point? anchor)
     {
         level = Math.Clamp(level, MinZoom, MaxZoom);
 
-        var width = PreviewImage.ActualWidth;
-        var height = PreviewImage.ActualHeight;
-        var pivot = anchor ?? new Point(width / 2, height / 2);
+        var hostW = PreviewHost.ActualWidth;
+        var hostH = PreviewHost.ActualHeight;
+        var elemW = PreviewImage.Width > 0 ? PreviewImage.Width : hostW;
+        var elemH = PreviewImage.Height > 0 ? PreviewImage.Height : hostH;
+
+        // Image 用居中对齐，未缩放时在宿主中的左上角偏移
+        var offsetX = (hostW - elemW) / 2;
+        var offsetY = (hostH - elemH) / 2;
+
+        var pivot = anchor ?? new Point(hostW / 2, hostH / 2);
 
         // 保持锚点下的内容不动：先反算该点在未缩放内容中的位置，再按新比例重新摆正
-        var contentX = (pivot.X - PanTransform.X) / _zoom;
-        var contentY = (pivot.Y - PanTransform.Y) / _zoom;
+        var contentX = (pivot.X - offsetX - PanTransform.X) / _zoom;
+        var contentY = (pivot.Y - offsetY - PanTransform.Y) / _zoom;
 
         _zoom = level;
         ZoomTransform.ScaleX = level;
         ZoomTransform.ScaleY = level;
 
-        if (level <= MinZoom + 0.001)
-        {
-            PanTransform.X = 0;
-            PanTransform.Y = 0;
-        }
-        else
-        {
-            PanTransform.X = pivot.X - contentX * level;
-            PanTransform.Y = pivot.Y - contentY * level;
-        }
+        PanTransform.X = pivot.X - offsetX - contentX * level;
+        PanTransform.Y = pivot.Y - offsetY - contentY * level;
 
         ClampPan();
     }
 
-    /// <summary>把平移量夹在"画面边缘不进入视口内部"的范围内。</summary>
+    /// <summary>把平移量夹在"画面边缘不离开视口"的范围内；画面比视口小时居中。</summary>
     private void ClampPan()
     {
-        var width = PreviewImage.ActualWidth;
-        var height = PreviewImage.ActualHeight;
-        if (width <= 0 || height <= 0) return;
+        var hostW = PreviewHost.ActualWidth;
+        var hostH = PreviewHost.ActualHeight;
+        var elemW = PreviewImage.Width;
+        var elemH = PreviewImage.Height;
+        if (hostW <= 0 || hostH <= 0 || elemW <= 0 || elemH <= 0) return;
 
-        var scaledWidth = width * _zoom;
-        var scaledHeight = height * _zoom;
+        var scaledW = elemW * _zoom;
+        var scaledH = elemH * _zoom;
+        var offsetX = (hostW - elemW) / 2;
+        var offsetY = (hostH - elemH) / 2;
 
-        PanTransform.X = scaledWidth <= width
-            ? 0
-            : Math.Clamp(PanTransform.X, width - scaledWidth, 0);
+        // 小于视口：居中（此时不该有黑边偏移，居中即最合理）
+        // 大于视口：允许在溢出范围内拖动，边缘不允许进入视口内部
+        PanTransform.X = scaledW <= hostW
+            ? (hostW - scaledW) / 2 - offsetX
+            : Math.Clamp(PanTransform.X, hostW - offsetX - scaledW, -offsetX);
 
-        PanTransform.Y = scaledHeight <= height
-            ? 0
-            : Math.Clamp(PanTransform.Y, height - scaledHeight, 0);
+        PanTransform.Y = scaledH <= hostH
+            ? (hostH - scaledH) / 2 - offsetY
+            : Math.Clamp(PanTransform.Y, hostH - offsetY - scaledH, -offsetY);
     }
 
     private void ResetView()
@@ -128,12 +187,14 @@ public partial class CameraPanelView : UserControl
         PanTransform.Y = 0;
     }
 
-    private void PreviewHost_SizeChanged(object sender, SizeChangedEventArgs e) => ClampPan();
-
-    /// <summary>找不到坐标计算依据时用的兜底：控件坐标 → 本控件坐标。</summary>
-    private Point GetAnchor(MouseEventArgs e) => e.GetPosition(PreviewImage);
+    private void PreviewHost_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateContentSize();
+        ClampPan();
+    }
 
     // ══════ 滚轮缩放 ══════
+
     private void PreviewImage_MouseWheel(object sender, MouseWheelEventArgs e)
     {
         if (_viewModel is null) return;
@@ -143,12 +204,13 @@ public partial class CameraPanelView : UserControl
         // 先把本地值同步过去，PropertyChanged 回调里才不会再以画面中心为锚点缩放一次
         _zoom = level;
         _viewModel.ZoomLevel = level;
-        ApplyZoom(level, GetAnchor(e));
+        ApplyZoom(level, e.GetPosition(PreviewHost));
 
         e.Handled = true;
     }
 
     // ══════ 双击复位 / 拖拽平移 ══════
+
     private void PreviewImage_MouseDown(object sender, MouseButtonEventArgs e)
     {
         if (_viewModel is null) return;
@@ -157,14 +219,16 @@ public partial class CameraPanelView : UserControl
         {
             _viewModel.ZoomResetCommand.Execute(null);
             ResetView();
+            ClampPan();
             e.Handled = true;
             return;
         }
 
-        if (_zoom <= MinZoom + 0.01) return;
+        // 填满模式下即使 1x 也可能有被裁掉的区域，允许直接拖动
+        if (_zoom <= MinZoom + 0.01 && !FillMode) return;
 
         _isPanning = true;
-        _lastMousePosition = e.GetPosition(PreviewImage);
+        _lastMousePosition = e.GetPosition(PreviewHost);
         PreviewImage.Cursor = Cursors.SizeAll;
         PreviewImage.CaptureMouse();
         e.Handled = true;
@@ -174,7 +238,7 @@ public partial class CameraPanelView : UserControl
     {
         if (!_isPanning) return;
 
-        var position = e.GetPosition(PreviewImage);
+        var position = e.GetPosition(PreviewHost);
         PanTransform.X += position.X - _lastMousePosition.X;
         PanTransform.Y += position.Y - _lastMousePosition.Y;
         ClampPan();

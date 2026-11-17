@@ -27,13 +27,16 @@
                         <Label Content="采集后端" />
                         <ComboBox x:Name="BackendCombo">
                             <ComboBoxItem Content="自动（推荐）" />
-                            <ComboBoxItem Content="DirectShow（兼容性最好）" />
-                            <ComboBoxItem Content="Media Foundation（部分驱动打开更快）" />
+                            <ComboBoxItem Content="DirectShow（兼容性最好·默认）" />
+                            <ComboBoxItem Content="Media Foundation（部分 USB 摄像头帧率更高，但打开要慢几秒）" />
                             <ComboBoxItem Content="任意（由 OpenCV 自行决定）" />
                         </ComboBox>
                         <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{StaticResource TextMuted}"
                                    Margin="2,4,2,0"
                                    Text="手机投屏、直播软件、会议软件会注册虚拟摄像头。程序会按系统注册信息识别并跳过这类设备，无论选哪个后端都不会去打开它们。" />
+                        <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{StaticResource TextMuted}"
+                                   Margin="2,4,2,0"
+                                   Text="实际帧率显示在每路画面标题栏（低于设定值会变黄）。若长期偏低：先看光线是否不足（暗光会自动拉长曝光），再考虑换后端或降分辨率。" />
 
                         <Label Content="分辨率" />
                         <ComboBox x:Name="ResolutionCombo">

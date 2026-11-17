@@ -16,6 +16,31 @@
     <Window.Resources>
         <conv:BoolToVisibilityConverter x:Key="Vis" />
         <conv:InverseBoolToVisibilityConverter x:Key="InvVis" />
+
+        <!-- 顶栏录制胶囊：录制中红底并呼吸，未录制时是灰色低调提示 -->
+        <Style x:Key="GlobalRecChip" TargetType="Border">
+            <Setter Property="CornerRadius" Value="11" />
+            <Setter Property="Padding" Value="9,3" />
+            <Setter Property="Margin" Value="0,0,10,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Background" Value="#F1F3F7" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding AnyRecording}" Value="True">
+                    <Setter Property="Background" Value="{StaticResource Danger}" />
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard x:Name="GlobalRecBlink">
+                            <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                 From="1" To="0.6" Duration="0:0:1" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <StopStoryboard BeginStoryboardName="GlobalRecBlink" />
+                    </DataTrigger.ExitActions>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -44,7 +69,7 @@
                                VerticalAlignment="Center" Margin="10,0,0,0" />
                 </StackPanel>
 
-                <!-- 布局与画面选择 -->
+                <!-- 布局、画面选择与填充方式 -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="28,0,0,0">
                     <ComboBox Width="124" SelectedIndex="{Binding LayoutIndex}" ToolTip="画面布局">
                         <ComboBoxItem Content="自动铺满" />
@@ -59,10 +84,54 @@
                               DisplayMemberPath="CameraName"
                               Visibility="{Binding IsSingleLayout, Converter={StaticResource Vis}}"
                               ToolTip="单画面模式下显示哪一路" />
+
+                    <!-- 填满 = 裁切不留黑边；适应 = 完整可见、可能留边 -->
+                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Padding="12,7"
+                            Command="{Binding ToggleFillCommand}"
+                            ToolTip="切换「填满面板（可能有裁切）」与「等比适应（可能有黑边）」">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="画面" FontSize="12" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding FillModeText}" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{StaticResource Accent}" Margin="5,0,0,0"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <!-- 右侧操作区 -->
                 <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- 录制总览：一眼确认"到底在不在录" -->
+                    <Border Style="{StaticResource GlobalRecChip}"
+                            Visibility="{Binding HasMonitoring, Converter={StaticResource Vis}}">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="7" Height="7" VerticalAlignment="Center" Margin="0,0,5,0">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="#9AA1AC" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding AnyRecording}" Value="True">
+                                                <Setter Property="Fill" Value="White" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock Text="{Binding RecordingChipText}" FontSize="11.5" FontWeight="SemiBold"
+                                       VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding AnyRecording}" Value="True">
+                                                <Setter Property="Foreground" Value="White" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
                     <Button Content="全部开始" Style="{StaticResource AccentButton}"
                             Padding="16,7"
                             Command="{Binding StartAllCommand}" />
@@ -82,14 +151,15 @@
 
                     <Rectangle Width="1" Height="20" Fill="{StaticResource BorderSoft}" Margin="14,0" />
 
-                    <ToggleButton x:Name="EventToggle" IsChecked="True" Content="事件"
-                                  Style="{StaticResource GhostToggle}" />
+                    <ToggleButton Content="事件" Style="{StaticResource GhostToggle}"
+                                  IsChecked="{Binding IsEventBarVisible, Mode=TwoWay}" />
                 </StackPanel>
             </Grid>
         </Border>
 
         <!-- ══════════════════ 主内容 ══════════════════ -->
-        <Grid Grid.Row="1" Margin="12,10,12,10">
+        <!-- 边距由 code-behind 按窗口状态调整：最大化时贴边铺满，普通窗口留呼吸空间 -->
+        <Grid x:Name="ContentRoot" Grid.Row="1" Margin="12,10,12,10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -108,7 +178,9 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <views:CameraPanelView />
+                            <views:CameraPanelView
+                                FillMode="{Binding DataContext.FillScreen,
+                                            RelativeSource={RelativeSource AncestorType=Window}}" />
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
@@ -132,11 +204,10 @@
                 </Border>
             </Grid>
 
-            <!-- 事件栏 -->
+            <!-- 事件栏（单路放大时自动让位） -->
             <Border Grid.Column="1" Width="248" Margin="10,0,0,0"
                     Style="{StaticResource Card}"
-                    Visibility="{Binding IsChecked, ElementName=EventToggle,
-                                 Converter={StaticResource Vis}}">
+                    Visibility="{Binding ShowEventBar, Converter={StaticResource Vis}}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -196,9 +267,25 @@
                 BorderBrush="{StaticResource BorderSoft}" BorderThickness="0,1,0,0" Padding="16,0">
             <Grid Height="30">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Ellipse Width="7" Height="7" Fill="{StaticResource Success}" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding StatusText}" FontSize="12" Foreground="{StaticResource TextSecondary}"
+                    <Ellipse Width="7" Height="7" VerticalAlignment="Center">
+                        <Ellipse.Style>
+                            <Style TargetType="Ellipse">
+                                <Setter Property="Fill" Value="{StaticResource Success}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding AnyRecording}" Value="True">
+                                        <Setter Property="Fill" Value="{StaticResource Danger}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Ellipse.Style>
+                    </Ellipse>
+                    <TextBlock Text="{Binding LiveSummary}" FontSize="12" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimary}"
                                Margin="8,0,0,0" VerticalAlignment="Center" />
+                    <Rectangle Width="1" Height="12" Fill="{StaticResource BorderSoft}" Margin="10,0" />
+                    <TextBlock Text="{Binding StatusText}" FontSize="11.5"
+                               Foreground="{StaticResource TextMuted}"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="420" />
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
