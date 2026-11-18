@@ -76,7 +76,7 @@
 
                         <Border Background="{StaticResource AccentSoft}" CornerRadius="6" Padding="12,10" Margin="0,8,0,0">
                             <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#2A5FA8"
-                                       Text="程序启动和「开始监控」都不会自动录像。开启本项只是让每路面板上的「● 录像」按钮可点，点了才开始写文件；停止监控或退出程序即停止。录像按摄像头原始分辨率写入，不做任何拉伸。" />
+                                       Text="程序启动和「开始监控」都不会自动录像。开启本项只是让每路面板上的「● 录像」按钮可点，点了才开始写文件；停止监控或退出程序即停止。录制时按画面原始比例等比输出，绝不拉伸变形。" />
                         </Border>
 
                         <Label Content="录制模式" />
@@ -96,11 +96,11 @@
                                     Height="34" Padding="14,0" Margin="8,0,0,0" Click="OnBrowseDirectory" />
                         </Grid>
 
-                        <Label Content="编码格式" />
-                        <ComboBox x:Name="CodecCombo">
-                            <ComboBoxItem Content="MJPG（兼容性最好）" />
-                            <ComboBoxItem Content="XVID" />
-                            <ComboBoxItem Content="MP4V" />
+                        <Label Content="录像画质（直接决定占多少硬盘）" />
+                        <ComboBox x:Name="QualityCombo">
+                            <ComboBoxItem Content="高清 —— 原始分辨率，细节最清楚（约 7.3 GB/小时）" />
+                            <ComboBoxItem Content="平衡 —— 960 宽 / 12 帧，日常够用（约 1.1 GB/小时）· 推荐" />
+                            <ComboBoxItem Content="省空间 —— 640 宽 / 8 帧，只看有没有人（约 0.3 GB/小时）" />
                         </ComboBox>
 
                         <Grid Margin="0,6,0,0">
@@ -110,7 +110,7 @@
                             </Grid.ColumnDefinitions>
 
                             <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                <Label Content="分段时长（分钟）" />
+                                <Label Content="每段时长（分钟）" />
                                 <TextBox x:Name="SegmentInput" />
                             </StackPanel>
 
@@ -119,6 +119,9 @@
                                 <TextBox x:Name="MotionRecordInput" />
                             </StackPanel>
                         </Grid>
+
+                        <Label Content="事件补录（秒，把触发前的画面也录进去）" />
+                        <TextBox x:Name="PreRollInput" />
 
                         <Grid>
                             <Grid.ColumnDefinitions>

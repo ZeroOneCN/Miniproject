@@ -11,6 +11,7 @@
         FontSize="13"
         Foreground="{StaticResource TextPrimary}"
         WindowStartupLocation="CenterScreen"
+        PreviewMouseMove="OnWindowMouseMove"
         Background="{StaticResource AppBackground}">
 
     <Window.Resources>
@@ -52,7 +53,8 @@
 
         <!-- ══════════════════ 顶部栏 ══════════════════ -->
         <Border Grid.Row="0" Background="{StaticResource Surface}"
-                BorderBrush="{StaticResource BorderSoft}" BorderThickness="0,0,0,1" Padding="16,0">
+                BorderBrush="{StaticResource BorderSoft}" BorderThickness="0,0,0,1" Padding="16,0"
+                Visibility="{Binding ShowWindowChrome, Converter={StaticResource Vis}}">
             <Grid Height="56">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -149,6 +151,9 @@
 
                     <Button Content="刷新设备" Style="{StaticResource GhostButton}"
                             Command="{Binding RefreshCommand}" />
+                    <Button Content="录像库" Style="{StaticResource GhostButton}" Margin="8,0,0,0"
+                            Command="{Binding LibraryCommand}"
+                            ToolTip="查看并回放录好的视频" />
                     <Button Content="网络摄像头" Style="{StaticResource GhostButton}" Margin="8,0,0,0"
                             Command="{Binding AddIpCameraCommand}" />
                     <Button Content="保存目录" Style="{StaticResource GhostButton}" Margin="8,0,0,0"
@@ -271,7 +276,8 @@
 
         <!-- ══════════════════ 状态栏 ══════════════════ -->
         <Border Grid.Row="2" Background="{StaticResource Surface}"
-                BorderBrush="{StaticResource BorderSoft}" BorderThickness="0,1,0,0" Padding="16,0">
+                BorderBrush="{StaticResource BorderSoft}" BorderThickness="0,1,0,0" Padding="16,0"
+                Visibility="{Binding ShowWindowChrome, Converter={StaticResource Vis}}">
             <Grid Height="30">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Ellipse Width="7" Height="7" VerticalAlignment="Center">
@@ -309,6 +315,27 @@
                     </TextBlock>
                 </StackPanel>
             </Grid>
+        </Border>
+
+        <!-- ══════════════════ 全屏浮层 ══════════════════ -->
+        <!-- 单路全屏会去掉标题栏做无边框最大化，系统的最小化/关闭就没了。
+             这里补一条浮层：鼠标一动就出现，静止几秒自动淡下去（淡了也还能点）。 -->
+        <Border x:Name="FullscreenBar" Grid.Row="0" Grid.RowSpan="3"
+                HorizontalAlignment="Right" VerticalAlignment="Top"
+                Margin="0,14,18,0" Padding="6,4"
+                Background="#D914171D" CornerRadius="18"
+                Panel.ZIndex="99"
+                Visibility="{Binding IsFullscreen, Converter={StaticResource Vis}}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="全屏中" FontSize="11" Foreground="#8A909B"
+                           VerticalAlignment="Center" Margin="10,0,8,0" />
+                <Button Content="退出全屏" Style="{StaticResource ChromeButton}" Padding="12,5"
+                        Click="OnExitFullscreenClick" ToolTip="退出全屏（Esc 或 F11）" />
+                <Button Content="—" Style="{StaticResource ChromeButton}" Padding="10,5"
+                        Click="OnMinimizeClick" ToolTip="最小化" />
+                <Button Content="✕" Style="{StaticResource ChromeButton}" Padding="10,5"
+                        Click="OnCloseClick" ToolTip="关闭程序" />
+            </StackPanel>
         </Border>
     </Grid>
 </Window>

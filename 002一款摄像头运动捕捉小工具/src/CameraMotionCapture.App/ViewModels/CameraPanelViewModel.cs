@@ -50,6 +50,9 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
     /// <summary>请求切换全屏</summary>
     public event EventHandler? FullscreenToggleRequested;
 
+    /// <summary>检测区域变化（主视图模型据此写盘）</summary>
+    public event EventHandler? RegionChanged;
+
     public CameraPanelViewModel(CameraPipeline pipeline, AppConfig config)
     {
         _pipeline = pipeline;
@@ -64,6 +67,9 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
         ZoomOutCommand = new RelayCommand(_ => ZoomLevel *= 0.8);
         ZoomResetCommand = new RelayCommand(_ => ZoomLevel = 1.0);
         FullscreenCommand = new RelayCommand(_ => FullscreenToggleRequested?.Invoke(this, EventArgs.Empty));
+        ToggleRegionModeCommand = new RelayCommand(_ => IsSelectingRegion = !IsSelectingRegion,
+            _ => IsMonitoring);
+        ClearRegionCommand = new RelayCommand(_ => SetRegion(null), _ => HasRegion);
 
         _renderTimer = new DispatcherTimer(DispatcherPriority.Render)
         {
@@ -73,6 +79,10 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
 
         _pipeline.Start();
         _renderTimer.Start();
+
+        // 恢复上次框选的检测区域（按通道存，换分辨率也不会丢）
+        if (_config.Camera.Regions.TryGetValue(ConfigKey, out var saved) && saved is not null && !saved.IsFullFrame)
+            ApplyRegion(saved, persist: false);
     }
 
     public CameraPipeline Pipeline => _pipeline;
@@ -266,11 +276,66 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
     public ICommand StartCommand { get; }
     public ICommand StopCommand { get; }
     public ICommand ToggleRecordCommand { get; }
+    public ICommand ToggleRegionModeCommand { get; }
+    public ICommand ClearRegionCommand { get; }
     public ICommand SnapshotCommand { get; }
     public ICommand ZoomInCommand { get; }
     public ICommand ZoomOutCommand { get; }
     public ICommand ZoomResetCommand { get; }
     public ICommand FullscreenCommand { get; }
+
+    // ───────────────────────────── 检测区域 ─────────────────────────────
+
+    private RegionRect? _region;
+    private bool _isSelectingRegion;
+
+    /// <summary>配置里的键：每路通道各存一份区域</summary>
+    public string ConfigKey => DisplayTarget;
+
+    public RegionRect? Region => _region;
+
+    public bool HasRegion => _region is not null && !_region.IsFullFrame;
+
+    /// <summary>正在框选：画面上按住左键拖拽即可画出检测框</summary>
+    public bool IsSelectingRegion
+    {
+        get => _isSelectingRegion;
+        set
+        {
+            if (!SetProperty(ref _isSelectingRegion, value)) return;
+
+            OnPropertyChanged(nameof(RegionButtonText));
+            if (value) StatusText = "在画面上拖拽框选检测区域";
+        }
+    }
+
+    public string RegionButtonText => IsSelectingRegion ? "完成框选" : HasRegion ? "重设区域" : "框选区域";
+
+    public string RegionTip => HasRegion
+        ? "只在这块区域内判定运动，点「重设区域」可重新框"
+        : "框选一块区域，只在这里判定运动（挡掉马路、树影、窗帘）";
+
+    public void SetRegion(RegionRect? region)
+    {
+        ApplyRegion(region, persist: true);
+        IsSelectingRegion = false;
+    }
+
+    private void ApplyRegion(RegionRect? region, bool persist)
+    {
+        _region = region?.Normalize();
+        if (_region is not null && _region.IsFullFrame) _region = null;
+
+        _pipeline.SetRegion(_region);
+
+        OnPropertyChanged(nameof(Region));
+        OnPropertyChanged(nameof(HasRegion));
+        OnPropertyChanged(nameof(RegionButtonText));
+        OnPropertyChanged(nameof(RegionTip));
+        CommandManager.InvalidateRequerySuggested();
+
+        if (persist) RegionChanged?.Invoke(this, EventArgs.Empty);
+    }
 
     // ───────────────────────────── 操作 ─────────────────────────────
 
@@ -296,6 +361,7 @@ public sealed class CameraPanelViewModel : ViewModelBase, IDisposable
             RecordRequested = false;
             IsRecording = false;
             MotionActive = false;
+            IsSelectingRegion = false;
             Fps = 0;
         }
 

@@ -13,14 +13,18 @@ public class RecordingSettings
     /// <summary>点「录像」之后的写入方式：持续录 / 只在运动时录</summary>
     public RecordMode Mode { get; set; } = RecordMode.Continuous;
 
+    /// <summary>录像画质档位：决定分辨率上限、写入帧率与压缩质量，直接决定文件大小</summary>
+    public RecordingQuality Quality { get; set; } = RecordingQuality.Balanced;
+
     public string SaveDir { get; set; } = "recordings";
 
     /// <summary>单个视频文件的最大时长（分钟），到达后自动切片</summary>
     public int SegmentMinutes { get; set; } = Constants.DefaultSegmentMinutes;
 
-    /// <summary>FourCC 编码，默认 MJPG（兼容性最好，无需外部 DLL）</summary>
-    public string Codec { get; set; } = Constants.DefaultCodec;
+    /// <summary>运动触发录制时，把触发之前这么多秒的画面也补进去</summary>
+    public int PreRollSeconds { get; set; } = Constants.DefaultPreRollSeconds;
 
+    /// <summary>截图（不是录像）的 JPEG 质量</summary>
     public int JpegQuality { get; set; } = Constants.DefaultQuality;
 
     /// <summary>事件录制模式下，一次运动触发后持续录制的秒数</summary>

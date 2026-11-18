@@ -55,6 +55,7 @@ public sealed class CameraPipeline : IDisposable
     private volatile bool _motionActive;
     private volatile bool _recording;
     private volatile bool _recordRequested;
+    private volatile RegionRect? _region;
     private int _faceCount;
     private double _fps;
     private string _statusText = "未启动";
@@ -96,6 +97,8 @@ public sealed class CameraPipeline : IDisposable
         _recorder = recorder;
         _storage = storage;
         _notifier = notifier;
+
+        _recorder.Configure(BuildRecordingOptions(config));
     }
 
     public int CameraId { get; }
@@ -119,6 +122,16 @@ public sealed class CameraPipeline : IDisposable
 
     /// <summary>已下达录像指令但还没真正在写（运动触发模式下等运动）</summary>
     public bool RecordArmed => _recordRequested && !_recording;
+
+    /// <summary>运动检测区域（相对坐标）；null 表示整幅画面</summary>
+    public RegionRect? Region => _region;
+
+    /// <summary>设置/清除运动检测区域。传 null 或整帧矩形都表示恢复全画面检测。</summary>
+    public void SetRegion(RegionRect? region)
+    {
+        _region = region?.Normalize();
+        _motion.Reset();   // 区域换了，历史帧尺寸可能不同，先清掉避免首帧误判
+    }
     public int FaceCount => Volatile.Read(ref _faceCount);
     public double Fps => Volatile.Read(ref _fps);
 
@@ -290,6 +303,7 @@ public sealed class CameraPipeline : IDisposable
 
         _overlay.Invalidate();
         _notifier.Configure(config.Motion.WebhookUrl);
+        _recorder.Configure(BuildRecordingOptions(config));
 
         // 人脸开关切换需要重新加载级联
         if (config.Face.Enabled && !_face.IsReady)
@@ -370,7 +384,7 @@ public sealed class CameraPipeline : IDisposable
         // ① 运动检测必须在叠加水印之前 —— 时间戳每秒变化，否则会把自己判成运动
         var motionNow = false;
         if (_monitoring && cfg.Motion.Enabled)
-            motionNow = _motion.Detect(frame);
+            motionNow = _motion.Detect(frame, ToPixelRect(_region, frame));
 
         // ② 人脸检测限频到 5fps，避免每帧都跑级联
         if (cfg.Face.Enabled && _face.IsReady && (now - _lastFaceCheck).TotalMilliseconds >= 200)
@@ -426,8 +440,23 @@ public sealed class CameraPipeline : IDisposable
         }
     }
 
-    private void HandleMotionEvent(Mat frame, AppConfig cfg, DateTime now)
+    /// <summary>把相对坐标的检测区域换算成像素矩形；全画面时返回 null（走快速路径）。</summary>
+    private static Rect? ToPixelRect(RegionRect? region, Mat frame)
     {
+        if (region is null || region.IsFullFrame) return null;
+
+        var x = (int)Math.Round(region.X * frame.Width);
+        var y = (int)Math.Round(region.Y * frame.Height);
+        var w = (int)Math.Round(region.Width * frame.Width);
+        var h = (int)Math.Round(region.Height * frame.Height);
+
+        w = Math.Clamp(w, 2, Math.Max(2, frame.Width - x));
+        h = Math.Clamp(h, 2, Math.Max(2, frame.Height - y));
+
+        return new Rect(x, y, w, h);
+    }
+
+    private void HandleMotionEvent(Mat frame, AppConfig cfg, DateTime now)    {
         var cooldown = TimeSpan.FromSeconds(Math.Max(1, cfg.Motion.CooldownSeconds));
         if (now - _lastNotifyAt < cooldown) return;
 
@@ -462,44 +491,45 @@ public sealed class CameraPipeline : IDisposable
 
         // 三道闸：功能开启、正在监控、人点了「录像」。少任何一道都不写文件，
         // 所以程序启动、开始监控、运动检测都不会自己开录。
-        if (!rec.Enabled || !_monitoring || !_recordRequested)
+        var armed = rec.Enabled && _monitoring && _recordRequested;
+
+        if (!armed)
         {
             StopRecording();
+            _recorder.Feed(frame, recordNow: false);
             return;
         }
 
-        bool shouldWrite;
+        bool recordNow;
         if (rec.Mode == RecordMode.Continuous)
         {
-            shouldWrite = true;
+            recordNow = true;
         }
         else
         {
             // 运动触发模式：点了「录像」只是布防，有运动才真正写，运动停止若干秒后收尾
             if (motionNow) _recordUntil = now.AddSeconds(Math.Max(3, rec.MotionRecordSeconds));
-            shouldWrite = now < _recordUntil;
+            recordNow = now < _recordUntil;
         }
 
-        if (!shouldWrite)
+        // 布防但还没触发时维护预录缓冲，这样事件录像开头能看到"事情是怎么开始的"
+        var keepPreRoll = !recordNow && rec.Mode == RecordMode.MotionTrigger;
+
+        _recorder.Feed(frame, recordNow, keepPreRoll);
+
+        var wasRecording = _recording;
+        _recording = _recorder.IsRecording;
+
+        if (_recording)
         {
-            StopRecording();
-            return;
+            if (!wasRecording || _recordStartedAt == DateTime.MinValue) _recordStartedAt = now;
+            _statusText = "监控中 · 录制";
         }
-
-        if (!_recorder.IsRecording)
+        else
         {
-            var ok = _recorder.Start(rec.SaveDir, frame.Width, frame.Height,
-                Math.Max(1, cfg.Camera.Fps), rec.Codec, rec.JpegQuality,
-                rec.SegmentMinutes, rec.UseDailyFolder);
-
-            _recording = ok;
-            _recordStartedAt = ok ? now : DateTime.MinValue;
-            _statusText = ok ? "监控中 · 录制" : "监控中（录制启动失败）";
-
-            if (!ok) return;
+            _recordStartedAt = DateTime.MinValue;
+            if (wasRecording) _statusText = "监控中";
         }
-
-        _recorder.WriteFrame(frame);
     }
 
     private void StopRecording()
@@ -508,13 +538,28 @@ public sealed class CameraPipeline : IDisposable
 
         var wasRecording = _recording || _recorder.IsRecording;
 
-        if (_recorder.IsRecording) _recorder.Stop();
+        _recorder.Stop();
         _recording = false;
         _recordStartedAt = DateTime.MinValue;
 
         // 状态文字跟着回落，别让底栏一直挂着「监控中 · 录制」骗人
         if (wasRecording && _statusText == "监控中 · 录制")
             _statusText = _monitoring ? "监控中" : "已停止";
+    }
+
+    /// <summary>把配置里的录像规格翻译成录制服务认识的参数</summary>
+    private RecordingOptions BuildRecordingOptions(AppConfig cfg)
+    {
+        var rec = cfg.Recording;
+        return new RecordingOptions
+        {
+            SaveDir = rec.SaveDir,
+            Quality = rec.Quality,
+            SegmentMinutes = Math.Max(1, rec.SegmentMinutes),
+            PreRollSeconds = Math.Clamp(rec.PreRollSeconds, 0, 60),
+            UseDailyFolder = rec.UseDailyFolder,
+            FileNamePrefix = rec.Mode == RecordMode.MotionTrigger ? "motion" : "rec"
+        };
     }
 
     private void PublishFrame(Mat bgr)
@@ -619,10 +664,25 @@ public sealed class CameraPipeline : IDisposable
         }
 
         _readFailures = Math.Max(_readFailures, 1);
-        SetState(CameraState.Retrying, $"{_reconnectDelaySec}s 后重试");
 
-        SleepInterruptible(TimeSpan.FromSeconds(_reconnectDelaySec));
+        // 倒计时可见：界面不会停在"重连中…"看不出到底还在不在努力，
+        // USB 被拔掉再插回来时，用户能从倒计时判断程序还在自愈。
+        var delay = _reconnectDelaySec;
+        var prefix = _readFailures <= 1 ? "等待设备就绪" : "连接中断";
+
+        for (var remaining = delay; remaining > 0 && _running; remaining--)
+        {
+            SetState(CameraState.Retrying, $"{prefix} · {remaining}s 后重试（第 {_readFailures} 次）");
+            SleepInterruptible(TimeSpan.FromSeconds(1));
+        }
+
+        if (!_running) return false;
+
         _reconnectDelaySec = Math.Min(_reconnectDelaySec * 2, 15);   // 上限 15 秒：等太久用户会以为坏了
+
+        if (_readFailures is 5 or 15 or 40)
+            Log.Warning("摄像头 {Id} 连续 {Count} 次打不开，请检查是否被其他程序占用或已拔出", CameraId, _readFailures);
+
         return false;
     }
 

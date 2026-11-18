@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using CameraMotionCapture.App.Models;
@@ -11,6 +12,12 @@ public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
 
+    /// <summary>全屏浮层的自动淡出计时器</summary>
+    private readonly System.Windows.Threading.DispatcherTimer _barFadeTimer = new()
+    {
+        Interval = TimeSpan.FromSeconds(2.5)
+    };
+
     public MainWindow(MainViewModel viewModel)
     {
         InitializeComponent();
@@ -22,16 +29,50 @@ public partial class MainWindow : Window
 
         _viewModel.SettingsRequested += OnSettingsRequested;
         _viewModel.AddIpCameraRequested += OnAddIpCameraRequested;
+        _viewModel.LibraryRequested += OnLibraryRequested;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
 
         StateChanged += (_, _) => ApplyContentMargin();
         PreviewKeyDown += OnPreviewKeyDown;
         Closed += (_, _) => _viewModel.Dispose();
 
+        _barFadeTimer.Tick += OnBarFadeTick;
+
         ApplyContentMargin();
 
         Log.Information("主窗口已就绪");
     }
+
+    // ══════════════════ 全屏浮层 ══════════════════
+
+    private void OnWindowMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_viewModel.IsFullscreen) return;
+
+        // 鼠标一动就把浮层亮出来，停手 2.5 秒后再淡下去（不会彻底消失，仍然可点）
+        FullscreenBar.BeginAnimation(OpacityProperty, null);
+        FullscreenBar.Opacity = 1;
+
+        _barFadeTimer.Stop();
+        _barFadeTimer.Start();
+    }
+
+    private void OnBarFadeTick(object? sender, EventArgs e)
+    {
+        _barFadeTimer.Stop();
+
+        if (!_viewModel.IsFullscreen) return;
+
+        FullscreenBar.BeginAnimation(OpacityProperty,
+            new System.Windows.Media.Animation.DoubleAnimation(0.16, TimeSpan.FromMilliseconds(400)));
+    }
+
+    private void OnExitFullscreenClick(object sender, RoutedEventArgs e)
+        => _viewModel.ExitFullscreenCommand.Execute(null);
+
+    private void OnMinimizeClick(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    private void OnCloseClick(object sender, RoutedEventArgs e) => Close();
 
 
     // ══════════════════ 窗口尺寸 ══════════════════
@@ -167,6 +208,27 @@ public partial class MainWindow : Window
 
         if (dialog.ShowDialog() == true)
             _viewModel.AddIpCamera(dialog.Value);
+    }
+
+    // ══════════════════ 录像库 ══════════════════
+
+    private void OnLibraryRequested(object? sender, EventArgs e)
+    {
+        try
+        {
+            var root = Path.IsPathRooted(_viewModel.Config.Recording.SaveDir)
+                ? _viewModel.Config.Recording.SaveDir
+                : Path.Combine(AppContext.BaseDirectory, _viewModel.Config.Recording.SaveDir);
+
+            var window = new RecordingsWindow(root) { Owner = this };
+            window.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "打开录像库失败");
+            MessageBox.Show(this, $"打开录像库失败：{ex.Message}", "错误",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     // ══════════════════ 事件列表 ══════════════════

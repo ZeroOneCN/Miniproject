@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using CameraMotionCapture.App.ViewModels;
+using CameraMotionCapture.Core.Models;
 
 namespace CameraMotionCapture.App.Views;
 
@@ -25,6 +26,10 @@ public partial class CameraPanelView : UserControl
     private bool _isPanning;
     private Point _lastMousePosition;
     private double _zoom = 1.0;
+
+    // 框选状态
+    private bool _regionDragging;
+    private Point _regionStart;
 
     /// <summary>true = 填满（裁切掉超出部分，不留黑边）；false = 适应（等比缩放到完整可见）</summary>
     public static readonly DependencyProperty FillModeProperty = DependencyProperty.Register(
@@ -94,6 +99,25 @@ public partial class CameraPanelView : UserControl
                 if (Math.Abs(_viewModel.ZoomLevel - _zoom) < 0.001) return;
                 ApplyZoom(_viewModel.ZoomLevel, null);
                 break;
+
+            case nameof(CameraPanelViewModel.Region):
+            case nameof(CameraPanelViewModel.HasRegion):
+                UpdateRegionBox();
+                break;
+
+            case nameof(CameraPanelViewModel.IsSelectingRegion):
+                if (_viewModel is null) break;
+
+                if (_viewModel.IsSelectingRegion)
+                {
+                    PreviewHost.Cursor = Cursors.Cross;
+                }
+                else
+                {
+                    RegionDraft.Visibility = Visibility.Collapsed;
+                    PreviewHost.Cursor = Cursors.Arrow;
+                }
+                break;
         }
     }
 
@@ -131,8 +155,10 @@ public partial class CameraPanelView : UserControl
 
         // 宽高共用一个比例，且不取整：这是"不拉伸"的根本保证。
         // 以前用 Math.Ceiling 会让宽高各自进位，长宽比就和源差了零点几个百分点。
-        PreviewImage.Width = srcW * scale;
-        PreviewImage.Height = srcH * scale;
+        ImageLayer.Width = srcW * scale;
+        ImageLayer.Height = srcH * scale;
+
+        UpdateRegionBox();
     }
 
     // ══════ 缩放与平移 ══════
@@ -147,8 +173,8 @@ public partial class CameraPanelView : UserControl
 
         var hostW = PreviewHost.ActualWidth;
         var hostH = PreviewHost.ActualHeight;
-        var elemW = PreviewImage.Width > 0 ? PreviewImage.Width : hostW;
-        var elemH = PreviewImage.Height > 0 ? PreviewImage.Height : hostH;
+        var elemW = ImageLayer.Width > 0 && !double.IsNaN(ImageLayer.Width) ? ImageLayer.Width : hostW;
+        var elemH = ImageLayer.Height > 0 && !double.IsNaN(ImageLayer.Height) ? ImageLayer.Height : hostH;
 
         // Image 用居中对齐，未缩放时在宿主中的左上角偏移
         var offsetX = (hostW - elemW) / 2;
@@ -175,8 +201,8 @@ public partial class CameraPanelView : UserControl
     {
         var hostW = PreviewHost.ActualWidth;
         var hostH = PreviewHost.ActualHeight;
-        var elemW = PreviewImage.Width;
-        var elemH = PreviewImage.Height;
+        var elemW = ImageLayer.Width;
+        var elemH = ImageLayer.Height;
         if (hostW <= 0 || hostH <= 0 || elemW <= 0 || elemH <= 0) return;
 
         var scaledW = elemW * _zoom;
@@ -208,6 +234,7 @@ public partial class CameraPanelView : UserControl
     {
         UpdateContentSize();
         ClampPan();
+        UpdateRegionBox();
     }
 
     // ══════ 滚轮缩放 ══════
@@ -226,11 +253,28 @@ public partial class CameraPanelView : UserControl
         e.Handled = true;
     }
 
-    // ══════ 双击复位 / 拖拽平移 ══════
+    // ══════ 双击复位 / 拖拽平移 / 框选检测区域 ══════
 
     private void PreviewImage_MouseDown(object sender, MouseButtonEventArgs e)
     {
         if (_viewModel is null) return;
+
+        // 框选模式优先：左键拖拽就是画检测框，此时不平移
+        if (_viewModel.IsSelectingRegion)
+        {
+            if (ImageLayer.Width <= 0 || ImageLayer.Height <= 0) return;
+
+            _regionStart = ClampToLayer(e.GetPosition(ImageLayer));
+            _regionDragging = true;
+
+            RegionDraft.Visibility = Visibility.Visible;
+            PlaceRect(RegionDraft, _regionStart, _regionStart);
+
+            PreviewHost.CaptureMouse();
+            PreviewHost.Cursor = Cursors.Cross;
+            e.Handled = true;
+            return;
+        }
 
         if (e.ClickCount == 2)
         {
@@ -246,13 +290,20 @@ public partial class CameraPanelView : UserControl
 
         _isPanning = true;
         _lastMousePosition = e.GetPosition(PreviewHost);
-        PreviewImage.Cursor = Cursors.SizeAll;
-        PreviewImage.CaptureMouse();
+        PreviewHost.Cursor = Cursors.SizeAll;
+        PreviewHost.CaptureMouse();
         e.Handled = true;
     }
 
     private void PreviewImage_MouseMove(object sender, MouseEventArgs e)
     {
+        if (_regionDragging)
+        {
+            PlaceRect(RegionDraft, _regionStart, ClampToLayer(e.GetPosition(ImageLayer)));
+            e.Handled = true;
+            return;
+        }
+
         if (!_isPanning) return;
 
         var position = e.GetPosition(PreviewHost);
@@ -267,11 +318,23 @@ public partial class CameraPanelView : UserControl
 
     private void PreviewImage_MouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (_regionDragging)
+        {
+            _regionDragging = false;
+            RegionDraft.Visibility = Visibility.Collapsed;
+            PreviewHost.ReleaseMouseCapture();
+            PreviewHost.Cursor = Cursors.Arrow;
+
+            CommitRegion(_regionStart, ClampToLayer(e.GetPosition(ImageLayer)));
+            e.Handled = true;
+            return;
+        }
+
         if (!_isPanning) return;
 
         _isPanning = false;
-        PreviewImage.Cursor = Cursors.Arrow;
-        PreviewImage.ReleaseMouseCapture();
+        PreviewHost.Cursor = Cursors.Arrow;
+        PreviewHost.ReleaseMouseCapture();
         e.Handled = true;
     }
 
@@ -280,7 +343,64 @@ public partial class CameraPanelView : UserControl
         if (!_isPanning) return;
 
         _isPanning = false;
-        PreviewImage.Cursor = Cursors.Arrow;
-        PreviewImage.ReleaseMouseCapture();
+        PreviewHost.Cursor = Cursors.Arrow;
+        PreviewHost.ReleaseMouseCapture();
+    }
+
+    // ══════ 检测区域 ══════
+
+    /// <summary>鼠标坐标夹到画面范围内（画布之外的拖拽不算）。</summary>
+    private Point ClampToLayer(Point point) => new(
+        Math.Clamp(point.X, 0, Math.Max(0, ImageLayer.Width)),
+        Math.Clamp(point.Y, 0, Math.Max(0, ImageLayer.Height)));
+
+    private static void PlaceRect(FrameworkElement element, Point a, Point b)
+    {
+        Canvas.SetLeft(element, Math.Min(a.X, b.X));
+        Canvas.SetTop(element, Math.Min(a.Y, b.Y));
+        element.Width = Math.Abs(a.X - b.X);
+        element.Height = Math.Abs(a.Y - b.Y);
+    }
+
+    /// <summary>把拖出来的矩形换算成相对坐标存进配置。</summary>
+    private void CommitRegion(Point a, Point b)
+    {
+        if (_viewModel is null || ImageLayer.Width <= 0 || ImageLayer.Height <= 0) return;
+
+        var width = Math.Abs(a.X - b.X) / ImageLayer.Width;
+        var height = Math.Abs(a.Y - b.Y) / ImageLayer.Height;
+
+        // 手抖画出来的小框没有意义，直接当成"取消"
+        if (width < 0.03 || height < 0.03)
+        {
+            _viewModel.IsSelectingRegion = false;
+            return;
+        }
+
+        _viewModel.SetRegion(new RegionRect
+        {
+            X = Math.Min(a.X, b.X) / ImageLayer.Width,
+            Y = Math.Min(a.Y, b.Y) / ImageLayer.Height,
+            Width = width,
+            Height = height
+        });
+    }
+
+    /// <summary>把已保存的区域画到画面上（跟着画面一起缩放/平移）。</summary>
+    private void UpdateRegionBox()
+    {
+        var region = _viewModel?.Region;
+
+        if (region is null || ImageLayer.Width <= 0 || ImageLayer.Height <= 0)
+        {
+            RegionBox.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        RegionBox.Visibility = Visibility.Visible;
+        Canvas.SetLeft(RegionBox, region.X * ImageLayer.Width);
+        Canvas.SetTop(RegionBox, region.Y * ImageLayer.Height);
+        RegionBox.Width = Math.Max(0, region.Width * ImageLayer.Width);
+        RegionBox.Height = Math.Max(0, region.Height * ImageLayer.Height);
     }
 }

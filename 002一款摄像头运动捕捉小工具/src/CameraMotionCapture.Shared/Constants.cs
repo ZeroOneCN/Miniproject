@@ -22,7 +22,13 @@ public static class Constants
     // 存储
     public const int DefaultQuality = 85;
     public const string DefaultCodec = "MJPG";
-    public const int DefaultSegmentMinutes = 10;
+
+    /// <summary>单个录像文件默认 1 小时一段：找片方便，也避免单文件过大损坏后全丢</summary>
+    public const int DefaultSegmentMinutes = 60;
+
+    /// <summary>运动触发时补录触发前 5 秒</summary>
+    public const int DefaultPreRollSeconds = 5;
+
     public const int DefaultRetentionDays = 7;
     public const double DefaultMaxStorageGb = 20;
     public const int DefaultMotionRecordSeconds = 30;

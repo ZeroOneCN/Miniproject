@@ -43,13 +43,15 @@ public sealed class MotionDetectionService : IMotionDetectionService
         }
     }
 
-    public bool Detect(Mat frame)
+    public bool Detect(Mat frame, Rect? region = null)
     {
         if (frame is null || frame.Empty()) return false;
 
         try
         {
-            using var small = Resize(frame);
+            // 有检测区域时只裁出这块：马路、树影、窗帘在区域外怎么动都不算
+            using var cropped = CropToRegion(frame, region);
+            using var small = Resize(cropped);
             using var gray = ToBlurredGray(small);
 
             if (_prevGray is null || _prevGray.Size() != gray.Size())
@@ -100,8 +102,22 @@ public sealed class MotionDetectionService : IMotionDetectionService
 
     // ───────────────────────────── 内部实现 ─────────────────────────────
 
-    private static Mat Resize(Mat frame)
+    /// <summary>按像素矩形裁出检测区域；没设区域就整帧参与。</summary>
+    private static Mat CropToRegion(Mat frame, Rect? region)
     {
+        if (region is null) return frame.Clone();
+
+        var rect = region.Value;
+        rect.X = Math.Clamp(rect.X, 0, Math.Max(0, frame.Width - 2));
+        rect.Y = Math.Clamp(rect.Y, 0, Math.Max(0, frame.Height - 2));
+        rect.Width = Math.Clamp(rect.Width, 2, Math.Max(2, frame.Width - rect.X));
+        rect.Height = Math.Clamp(rect.Height, 2, Math.Max(2, frame.Height - rect.Y));
+
+        using var view = new Mat(frame, rect);
+        return view.Clone();
+    }
+
+    private static Mat Resize(Mat frame)    {
         var targetWidth = Math.Min(Constants.MotionDetectWidth, frame.Width);
         if (frame.Width <= targetWidth) return frame.Clone();
 

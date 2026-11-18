@@ -54,6 +54,9 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     public event EventHandler? SettingsRequested;
     public event EventHandler? AddIpCameraRequested;
 
+    /// <summary>请求打开录像库（回放）</summary>
+    public event EventHandler? LibraryRequested;
+
     public MainViewModel(
         ISettingsService settings,
         IStorageService storage,
@@ -78,6 +81,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         RecordAllCommand = new RelayCommand(_ => SetAllRecording(!AnyRecordingRequested),
             _ => HasMonitoring);
         SettingsCommand = new RelayCommand(_ => SettingsRequested?.Invoke(this, EventArgs.Empty));
+        LibraryCommand = new RelayCommand(_ => LibraryRequested?.Invoke(this, EventArgs.Empty),
+            _ => Directory.Exists(ResolveSaveDir()));
         OpenSaveDirCommand = new RelayCommand(_ => OpenSaveDirectory());
         ClearEventsCommand = new RelayCommand(_ =>
         {
@@ -86,6 +91,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         });
         OpenSnapshotCommand = new RelayCommand(p => OpenPath(p as string));
         ToggleFullscreenCommand = new RelayCommand(p => ToggleFullscreen(p as CameraPanelViewModel));
+        ExitFullscreenCommand = new RelayCommand(_ => ExitFullscreen(), _ => IsFullscreen);
         ToggleFillCommand = new RelayCommand(_ => FillScreen = !FillScreen);
 
         _diskGuardTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(Constants.DiskGuardIntervalSeconds) };
@@ -210,6 +216,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             {
                 OnPropertyChanged(nameof(IsFullscreen));
                 OnPropertyChanged(nameof(ShowEventBar));
+                OnPropertyChanged(nameof(ShowWindowChrome));
                 // 全屏时网格必须变成 1×1，否则画面只占左上角一格
                 OnPropertyChanged(nameof(GridRows));
                 OnPropertyChanged(nameof(GridColumns));
@@ -234,6 +241,9 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
 
     /// <summary>事件栏是否占位：单路放大时让出整屏，退出后恢复原来的开关状态</summary>
     public bool ShowEventBar => _eventBarVisible && !IsFullscreen;
+
+    /// <summary>顶栏与状态栏是否显示：全屏时收起来，让画面真正占满整屏</summary>
+    public bool ShowWindowChrome => !IsFullscreen;
 
     public bool IsSingleLayout => _layout == LayoutMode.Single;
 
@@ -308,10 +318,12 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     public ICommand StopAllCommand { get; }
     public ICommand RecordAllCommand { get; }
     public ICommand SettingsCommand { get; }
+    public ICommand LibraryCommand { get; }
     public ICommand OpenSaveDirCommand { get; }
     public ICommand ClearEventsCommand { get; }
     public ICommand OpenSnapshotCommand { get; }
     public ICommand ToggleFullscreenCommand { get; }
+    public ICommand ExitFullscreenCommand { get; }
     public ICommand ToggleFillCommand { get; }
 
     // ───────────────────────────── 实时状态 ─────────────────────────────
@@ -426,6 +438,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         var panel = new CameraPanelViewModel(pipeline, _config);
         panel.EventRaised += OnPanelEvent;
         panel.FullscreenToggleRequested += (s, _) => ToggleFullscreen(s as CameraPanelViewModel);
+        panel.RegionChanged += (_, _) => PersistRegion(panel);
 
         // 监控/录制状态一变就刷新顶栏与状态栏，不用等定时器那一拍
         panel.PropertyChanged += OnPanelPropertyChanged;
@@ -433,6 +446,22 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         Cameras.Add(panel);
         _selectedCamera ??= panel;
         RefreshLiveState();
+    }
+
+    /// <summary>把某一路的检测区域写回配置并落盘</summary>
+    private void PersistRegion(CameraPanelViewModel panel)
+    {
+        try
+        {
+            if (panel.Region is null) _config.Camera.Regions.Remove(panel.ConfigKey);
+            else _config.Camera.Regions[panel.ConfigKey] = panel.Region.Clone();
+
+            _settings.Save(_config);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "保存检测区域失败");
+        }
     }
 
     private void OnPanelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -582,9 +611,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     {
         try
         {
-            var root = Path.IsPathRooted(_config.Recording.SaveDir)
-                ? _config.Recording.SaveDir
-                : Path.Combine(AppContext.BaseDirectory, _config.Recording.SaveDir);
+            var root = ResolveSaveDir();
 
             Directory.CreateDirectory(root);
             Process.Start(new ProcessStartInfo("explorer.exe", $"\"{root}\"") { UseShellExecute = true });
@@ -594,6 +621,13 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             Log.Warning(ex, "打开保存目录失败");
             StatusText = "无法打开保存目录";
         }
+    }
+
+    /// <summary>录像/截图的绝对目录（配置里可能是相对路径）</summary>
+    private string ResolveSaveDir()
+    {
+        var dir = _config.Recording.SaveDir;
+        return Path.IsPathRooted(dir) ? dir : Path.Combine(AppContext.BaseDirectory, dir);
     }
 
     private void OpenPath(string? path)

@@ -13,8 +13,11 @@ public interface IMotionDetectionService : IDisposable
     /// <summary>当前生效的检测面积阈值（由灵敏度换算）</summary>
     int AreaThreshold { get; }
 
-    /// <summary>输入一帧，返回该帧是否判定为有运动</summary>
-    bool Detect(Mat frame);
+    /// <summary>
+    /// 输入一帧，返回该帧是否判定为有运动。
+    /// <paramref name="region"/> 不为空时只看这块矩形（像素坐标），区域外一概忽略。
+    /// </summary>
+    bool Detect(Mat frame, Rect? region = null);
 
     /// <summary>清除历史帧（摄像头重连后调用，避免误判）</summary>
     void Reset();

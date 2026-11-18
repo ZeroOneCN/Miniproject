@@ -44,14 +44,10 @@ public partial class SettingsDialog : Window
         RecordEnabledCheck.IsChecked = c.Recording.Enabled;
         RecordModeCombo.SelectedIndex = (int)c.Recording.Mode;
         SaveDirInput.Text = c.Recording.SaveDir;
-        CodecCombo.SelectedIndex = c.Recording.Codec.ToUpperInvariant() switch
-        {
-            "XVID" => 1,
-            "MP4V" => 2,
-            _ => 0
-        };
+        QualityCombo.SelectedIndex = (int)c.Recording.Quality;
         SegmentInput.Text = c.Recording.SegmentMinutes.ToString();
         MotionRecordInput.Text = c.Recording.MotionRecordSeconds.ToString();
+        PreRollInput.Text = c.Recording.PreRollSeconds.ToString();
         MaxStorageInput.Text = c.Recording.MaxStorageGb.ToString("0.#");
         RetentionInput.Text = c.Recording.RetentionDays.ToString();
         DailyFolderCheck.IsChecked = c.Recording.UseDailyFolder;
@@ -96,16 +92,20 @@ public partial class SettingsDialog : Window
                 Fps = FpsCombo.SelectedIndex >= 0 && FpsCombo.SelectedIndex < FpsOptions.Length
                     ? FpsOptions[FpsCombo.SelectedIndex]
                     : Constants.DefaultFps,
-                HardwareAccel = HardwareAccelCheck.IsChecked == true
+                HardwareAccel = HardwareAccelCheck.IsChecked == true,
+                // 检测区域不在这个窗口里编辑，原样带回去，别被新对象吃掉
+                Regions = _source.Camera.Regions,
+                FillScreen = _source.Camera.FillScreen
             },
             Recording = new RecordingSettings
             {
                 Enabled = RecordEnabledCheck.IsChecked == true,
                 Mode = (RecordMode)Math.Max(0, RecordModeCombo.SelectedIndex),
                 SaveDir = string.IsNullOrWhiteSpace(SaveDirInput.Text) ? "recordings" : SaveDirInput.Text.Trim(),
-                Codec = CodecCombo.SelectedIndex switch { 1 => "XVID", 2 => "MP4V", _ => "MJPG" },
+                Quality = (RecordingQuality)Math.Clamp(QualityCombo.SelectedIndex, 0, 2),
                 SegmentMinutes = ParseInt(SegmentInput.Text, Constants.DefaultSegmentMinutes, 1, 240),
                 MotionRecordSeconds = ParseInt(MotionRecordInput.Text, Constants.DefaultMotionRecordSeconds, 3, 600),
+                PreRollSeconds = ParseInt(PreRollInput.Text, Constants.DefaultPreRollSeconds, 0, 60),
                 MaxStorageGb = ParseDouble(MaxStorageInput.Text, Constants.DefaultMaxStorageGb),
                 RetentionDays = ParseInt(RetentionInput.Text, Constants.DefaultRetentionDays, 1, 3650),
                 UseDailyFolder = DailyFolderCheck.IsChecked == true,

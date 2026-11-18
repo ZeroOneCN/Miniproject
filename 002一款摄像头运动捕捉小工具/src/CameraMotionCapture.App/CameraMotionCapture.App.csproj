@@ -6,9 +6,11 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <!-- 回放时要把解码出的帧逐行拷进 WriteableBitmap，指针拷贝最快 -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>摄像头监控台</AssemblyName>
     <RootNamespace>CameraMotionCapture.App</RootNamespace>
-    <Version>2.4.0</Version>
+    <Version>2.5.0</Version>
     <Product>摄像头监控台</Product>
     <Company>CameraMonitor</Company>
     <Description>轻量级多路摄像头监控台</Description>

@@ -125,21 +125,36 @@
                   MouseMove="PreviewImage_MouseMove"
                   MouseUp="PreviewImage_MouseUp"
                   MouseLeave="PreviewImage_MouseLeave">
-                <Image x:Name="PreviewImage"
-                       Source="{Binding CameraImage, NotifyOnTargetUpdated=True}"
-                       TargetUpdated="PreviewImage_TargetUpdated"
-                       Stretch="Uniform"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"
-                       RenderOptions.BitmapScalingMode="HighQuality"
-                       RenderTransformOrigin="0,0">
-                    <Image.RenderTransform>
+
+                <!-- 画面 + 检测区域放在同一层：缩放/平移作用在整层上，区域框跟着画面一起走 -->
+                <Grid x:Name="ImageLayer" HorizontalAlignment="Center" VerticalAlignment="Center"
+                      RenderTransformOrigin="0,0">
+                    <Grid.RenderTransform>
                         <TransformGroup>
                             <ScaleTransform x:Name="ZoomTransform" ScaleX="1" ScaleY="1" />
                             <TranslateTransform x:Name="PanTransform" X="0" Y="0" />
                         </TransformGroup>
-                    </Image.RenderTransform>
-                </Image>
+                    </Grid.RenderTransform>
+
+                    <Image x:Name="PreviewImage"
+                           Source="{Binding CameraImage, NotifyOnTargetUpdated=True}"
+                           TargetUpdated="PreviewImage_TargetUpdated"
+                           Stretch="Uniform"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
+
+                    <!-- 检测区域：只在框内判定运动 -->
+                    <Canvas x:Name="RegionLayer" IsHitTestVisible="False">
+                        <Border x:Name="RegionBox" BorderBrush="{StaticResource Danger}" BorderThickness="2"
+                                Background="#22E0524B" Visibility="Collapsed">
+                            <TextBlock Text="检测区域" Foreground="#FFB4AE" FontSize="10"
+                                       Margin="5,2" FontWeight="SemiBold" />
+                        </Border>
+
+                        <!-- 框选过程中的虚线预览框 -->
+                        <Rectangle x:Name="RegionDraft" Stroke="#FFD79A" StrokeThickness="1.5"
+                                   StrokeDashArray="4 3" Fill="#22E8A33D" Visibility="Collapsed" />
+                    </Canvas>
+                </Grid>
 
                 <!-- 空状态 -->
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -163,6 +178,19 @@
                         Padding="10,3" CornerRadius="10" Background="#CCE0524B"
                         Visibility="{Binding MotionActive, Converter={StaticResource Vis}}">
                     <TextBlock Text="检测到运动" Foreground="White" FontSize="11" FontWeight="SemiBold" />
+                </Border>
+
+                <!-- 框选提示 -->
+                <Border VerticalAlignment="Top" Margin="0,10,0,0"
+                        Padding="12,5" CornerRadius="10" Background="#D9E8A33D"
+                        IsHitTestVisible="False"
+                        Visibility="{Binding IsSelectingRegion, Converter={StaticResource Vis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="按住左键拖拽，框出要检测的范围" Foreground="White"
+                                   FontSize="11.5" FontWeight="SemiBold" />
+                        <TextBlock Text="· 再次点「完成框选」退出" Foreground="#FFF0D5"
+                                   FontSize="11" Margin="8,0,0,0" />
+                    </StackPanel>
                 </Border>
 
                 <!-- 右上角录制角标：红点 + 计时，缩到小面板也看得见 -->
@@ -217,6 +245,15 @@
                         <TextBlock Text="·" Foreground="#4A4F58" VerticalAlignment="Center" Margin="2,0" />
                         <Button Content="抓拍" Style="{StaticResource ChromeButton}"
                                 Command="{Binding SnapshotCommand}" />
+
+                        <TextBlock Text="·" Foreground="#4A4F58" VerticalAlignment="Center" Margin="2,0" />
+                        <Button Content="{Binding RegionButtonText}" Style="{StaticResource ChromeButton}"
+                                Command="{Binding ToggleRegionModeCommand}"
+                                ToolTip="{Binding RegionTip}" />
+                        <Button Content="清除" Style="{StaticResource ChromeButton}"
+                                Command="{Binding ClearRegionCommand}"
+                                Visibility="{Binding HasRegion, Converter={StaticResource Vis}}"
+                                ToolTip="恢复全画面检测" />
                     </StackPanel>
 
                     <TextBlock Grid.Column="1" Text="{Binding StatusText}" FontSize="11"
