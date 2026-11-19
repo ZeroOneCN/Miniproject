@@ -15,6 +15,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- 标题 -->
@@ -101,8 +102,25 @@
             </Grid>
         </GroupBox>
 
+        <!-- 熄屏与诊断 -->
+        <GroupBox Grid.Row="4" Header="熄屏与诊断">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Button Grid.Column="0" Content="立即熄屏"
+                        Style="{StaticResource AccentButtonStyle}"
+                        Command="{Binding TurnOffScreenCommand}" />
+                <Button Grid.Column="1" Content="检查谁在占用"
+                        Command="{Binding DiagnoseCommand}"
+                        IsEnabled="{Binding IsNotRefreshing}" />
+            </Grid>
+        </GroupBox>
+
         <!-- 底部：开机自启 -->
-        <Grid Grid.Row="4" Margin="14,10,14,0">
+        <Grid Grid.Row="5" Margin="14,10,14,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />

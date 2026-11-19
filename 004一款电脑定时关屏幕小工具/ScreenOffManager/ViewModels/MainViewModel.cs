@@ -1,3 +1,4 @@
+using System.Text;
 using System.Windows.Input;
 using ScreenOffManager.Services;
 
@@ -29,6 +30,8 @@ public class MainViewModel : ObservableObject
         SetDefaultCommand = new RelayCommand(async () => await ApplyPresetAsync(10));
         ApplyCustomCommand = new RelayCommand(async () => await ApplyCustomAsync());
         RefreshCommand = new RelayCommand(async () => await RefreshAsync());
+        TurnOffScreenCommand = new RelayCommand(async () => await TurnOffScreenAsync());
+        DiagnoseCommand = new RelayCommand(async () => await DiagnoseAsync());
 
         // 初始加载
         _ = RefreshAsync();
@@ -102,6 +105,8 @@ public class MainViewModel : ObservableObject
     public ICommand SetDefaultCommand { get; }
     public ICommand ApplyCustomCommand { get; }
     public ICommand RefreshCommand { get; }
+    public ICommand TurnOffScreenCommand { get; }
+    public ICommand DiagnoseCommand { get; }
 
     // ---------- 业务逻辑 ----------
 
@@ -181,5 +186,95 @@ public class MainViewModel : ObservableObject
         _settings.Save();
 
         await ApplyPresetAsync(minutes);
+    }
+
+    /// <summary>立即熄屏：不依赖系统空闲判定，也不受其他程序占用影响</summary>
+    private async Task TurnOffScreenAsync()
+    {
+        try
+        {
+            await Task.Run(DisplayPowerService.TurnOffMonitor);
+            // 屏幕已经黑了，成功时不弹窗（弹了也看不见）
+        }
+        catch (Exception ex)
+        {
+            Log.Error("强制关闭显示器失败", ex);
+            MessageRequested?.Invoke("熄屏失败", ex.Message);
+        }
+    }
+
+    /// <summary>诊断：找出正在阻止显示器关闭的程序</summary>
+    private async Task DiagnoseAsync()
+    {
+        IsRefreshing = true;
+        try
+        {
+            var (items, raw, error) = await Task.Run(DisplayPowerService.GetRequests);
+
+            if (!string.IsNullOrWhiteSpace(raw))
+                Log.Info($"电源请求原始输出：\n{raw}");
+
+            if (!string.IsNullOrEmpty(error))
+            {
+                MessageRequested?.Invoke("检查失败", error);
+                return;
+            }
+
+            var display = items.Where(i => i.Section.Contains("DISPLAY", StringComparison.OrdinalIgnoreCase)).ToList();
+            var others = items.Except(display).ToList();
+
+            var sb = new StringBuilder();
+            sb.AppendLine($"当前关闭时间：{TimeoutText}");
+            sb.AppendLine();
+
+            if (display.Count == 0)
+            {
+                sb.AppendLine("显示器占用：无");
+            }
+            else
+            {
+                sb.AppendLine($"显示器占用：{display.Count} 项（就是它们让屏幕不灭）");
+                foreach (var d in display.Take(6))
+                    sb.AppendLine("  " + ShortenTarget(d.Target));
+            }
+
+            if (others.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("其他电源请求（阻止睡眠，不影响熄屏）：");
+                foreach (var o in others.Take(4))
+                    sb.AppendLine("  " + ShortenTarget(o.Target));
+            }
+
+            sb.AppendLine();
+            sb.AppendLine(display.Count > 0
+                ? "处理：退出上面的程序；或点「立即熄屏」直接关屏。"
+                : "系统当前没有程序阻止熄屏。若屏幕仍常亮，检查：\n"
+                  + "· 「关闭时间」是否被其他软件改回「永不关闭」\n"
+                  + "· 鼠标键盘是否有轻微输入（会重置空闲计时）\n"
+                  + "· 显示器自身的节能/自动待机设置");
+
+            MessageRequested?.Invoke("显示占用诊断", sb.ToString().TrimEnd());
+        }
+        catch (Exception ex)
+        {
+            Log.Error("诊断显示占用失败", ex);
+            MessageRequested?.Invoke("检查失败", ex.Message);
+        }
+        finally
+        {
+            IsRefreshing = false;
+        }
+    }
+
+    private static string ShortenTarget(string target)
+    {
+        var t = target
+            .Replace("[PROCESS] ", "")
+            .Replace("[SERVICE] ", "")
+            .Replace("[DRIVER] ", "")
+            .Trim();
+
+        return t.Length <= 64 ? t : "…" + t[^62..];
     }
 }
